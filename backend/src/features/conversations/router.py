@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, status
 
 from src import db
+from src.dependencies import LLMDep
 from src.features.evaluation.service import list_conversations_with_scores
 from src.features.evaluation.timing import with_offsets
 
@@ -10,8 +11,8 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 @router.get("")
-async def list_conversations(dataset: str | None = None) -> list[dict]:
-    return await asyncio.to_thread(list_conversations_with_scores, dataset)
+async def list_conversations(llm: LLMDep, dataset: str | None = None) -> list[dict]:
+    return await asyncio.to_thread(list_conversations_with_scores, dataset, llm)
 
 
 @router.get("/{conversation_id}")

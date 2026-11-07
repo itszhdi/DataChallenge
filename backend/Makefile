@@ -1,4 +1,4 @@
-.PHONY: install run test import-dev upload eval batch job analytics clean-db docker-build docker-up docker-down docker-logs
+.PHONY: install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker analytics clean-db docker-build docker-up docker-down docker-logs
 
 PORT ?= 8000
 
@@ -40,6 +40,37 @@ docker-down:
 
 docker-logs:
 	docker compose logs -f api
+
+jobs:
+	@curl -s localhost:$(PORT)/api/jobs
+
+queue:
+	@curl -s "localhost:$(PORT)/api/queue?dataset=$(DATASET)"
+
+retry-failed:
+	@curl -s -X POST localhost:$(PORT)/api/evaluate/batch -H 'Content-Type: application/json' -d '{"only_failed":true}'
+
+settings:
+	@curl -s localhost:$(PORT)/api/settings
+
+models:
+	@curl -s localhost:$(PORT)/api/settings/models
+
+use-gemini:
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"gemini"}'
+
+use-local:
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"local"}'
+
+# * SORT: date_asc | date_desc | size_asc | size_desc
+auto-on:
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":true,"auto_sort":"$(or $(SORT),date_asc)"}'
+
+auto-off:
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":false}'
+
+worker:
+	@curl -s localhost:$(PORT)/api/worker
 
 clean-db:
 	rm -f cqa.sqlite3 cqa.sqlite3-wal cqa.sqlite3-shm

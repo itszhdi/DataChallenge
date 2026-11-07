@@ -60,6 +60,25 @@ CREATE TABLE IF NOT EXISTS appeals (
     resolved_at TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_appeals_evaluation ON appeals(evaluation_id);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS analysis_status (
+    conversation_id TEXT PRIMARY KEY REFERENCES conversations(id),
+    state TEXT NOT NULL,
+    source TEXT NOT NULL,
+    job_id TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    model TEXT,
+    queued_at TEXT,
+    started_at TEXT,
+    finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_analysis_status_state ON analysis_status(state);
 """
 
 JSON_FIELDS = {"transcript", "data", "answers", "meta", "new_answer"}
@@ -165,8 +184,10 @@ def list_conversations(dataset: str | None = None) -> list[dict[str, Any]]:
     # * Список без транскрипта + id последней оценки и число открытых апелляций по ней
     sql = """
         SELECT c.id, c.source_id, c.dataset, c.seq, c.channel, c.language, c.audio_url, c.imported_at, json_array_length(c.transcript) AS messages,
-               (SELECT e.id FROM evaluations e WHERE e.conversation_id = c.id ORDER BY e.id DESC LIMIT 1) AS last_evaluation_id
-        FROM conversations c {where} ORDER BY c.dataset, c.seq, c.id
+               (SELECT e.id FROM evaluations e WHERE e.conversation_id = c.id ORDER BY e.id DESC LIMIT 1) AS last_evaluation_id,
+               s.state AS status, s.source AS status_source, s.error AS status_error, s.attempts AS status_attempts,
+               s.queued_at AS status_queued_at, s.started_at AS status_started_at, s.finished_at AS status_finished_at
+        FROM conversations c LEFT JOIN analysis_status s ON s.conversation_id = c.id {where} ORDER BY c.dataset, c.seq, c.id
     """
     where, params = ("WHERE c.dataset = ?", (dataset,)) if dataset else ("", ())
     with connect() as conn:
@@ -320,16 +341,146 @@ def latest_evaluation_id(conversation_id: str) -> int | None:
         return row[0]
 
 
-def copy_resolved_appeals(from_evaluation_id: int, to_evaluation_id: int, criteria_ids: list[str]) -> int:
-    # * При переносе оценки на новый чек-лист решения по апелляциям для неизменных критериев сохраняются
-    if not criteria_ids:
-        return 0
-    marks = ",".join("?" * len(criteria_ids))
+REOPEN_NOTE = "\n[Критерий изменён после решения «{decision}: {reason}» — пересмотрите апелляцию]"
+
+
+def carry_appeals(from_evaluation_id: int, to_evaluation_id: int, unchanged_ids: list[str], present_ids: list[str]) -> dict[str, int]:
+    # ** Апелляции живут на актуальной оценке: открытые переезжают, решения копируются, по изменённым критериям — снова открываются
+    unchanged, present = set(unchanged_ids), set(present_ids)
+    moved = copied = reopened = 0
+    with connect() as conn:
+        rows = _rows(conn.execute("SELECT * FROM appeals WHERE evaluation_id = ? ORDER BY id", (from_evaluation_id,)).fetchall())
+        # ! По критерию допускается одна открытая апелляция: переоткрываем только последнее решение и только если открытой нет
+        open_criteria = {a["criterion_id"] for a in rows if a["status"] == "open"}
+        last_resolved = {a["criterion_id"]: a["id"] for a in rows if a["status"] == "resolved"}
+        for a in rows:
+            if a["criterion_id"] not in present:
+                continue
+            if a["status"] == "open":
+                conn.execute("UPDATE appeals SET evaluation_id = ? WHERE id = ?", (to_evaluation_id, a["id"]))
+                moved += 1
+            elif a["criterion_id"] in unchanged:
+                conn.execute(
+                    """INSERT INTO appeals (evaluation_id, criterion_id, comment, status, decision, new_answer, reason, created_at, resolved_at)
+                       VALUES (?, ?, ?, 'resolved', ?, ?, ?, ?, ?)""",
+                    (to_evaluation_id, a["criterion_id"], a["comment"], a["decision"],
+                     _dump(a["new_answer"]) if a["new_answer"] is not None else None, a["reason"], a["created_at"], a["resolved_at"]),
+                )
+                copied += 1
+            elif a["id"] == last_resolved[a["criterion_id"]] and a["criterion_id"] not in open_criteria:
+                note = REOPEN_NOTE.format(decision=a["decision"], reason=a["reason"])
+                conn.execute(
+                    "INSERT INTO appeals (evaluation_id, criterion_id, comment, created_at) VALUES (?, ?, ?, ?)",
+                    (to_evaluation_id, a["criterion_id"], a["comment"] + note, a["created_at"]),
+                )
+                reopened += 1
+    return {"moved": moved, "copied": copied, "reopened": reopened}
+
+
+# * Настройки приложения (переключаются из UI)
+
+
+def get_app_settings() -> dict[str, Any]:
+    with connect() as conn:
+        return {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM app_settings").fetchall()}
+
+
+def set_app_settings(values: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.executemany(
+            "INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [(k, _dump(v)) for k, v in values.items()],
+        )
+
+
+# * Статусы анализа: переживают перезагрузку страницы и рестарт сервера
+
+
+def queue_statuses(conversation_ids: list[str], source: str, job_id: str | None) -> None:
+    now = _now()
+    with connect() as conn:
+        conn.executemany(
+            """INSERT INTO analysis_status (conversation_id, state, source, job_id, queued_at)
+               VALUES (?, 'queued', ?, ?, ?)
+               ON CONFLICT(conversation_id) DO UPDATE SET state='queued', source=excluded.source, job_id=excluded.job_id,
+                 error=NULL, queued_at=excluded.queued_at, started_at=NULL, finished_at=NULL""",
+            [(cid, source, job_id, now) for cid in conversation_ids],
+        )
+
+
+def start_status(conversation_id: str, source: str, job_id: str | None, model: str) -> None:
+    now = _now()
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO analysis_status (conversation_id, state, source, job_id, attempts, model, queued_at, started_at)
+               VALUES (?, 'running', ?, ?, 1, ?, ?, ?)
+               ON CONFLICT(conversation_id) DO UPDATE SET state='running', source=excluded.source, job_id=excluded.job_id,
+                 error=NULL, attempts=attempts + 1, model=excluded.model, started_at=excluded.started_at, finished_at=NULL,
+                 queued_at=COALESCE(analysis_status.queued_at, excluded.queued_at)""",
+            (conversation_id, source, job_id, model, now, now),
+        )
+
+
+def finish_status(conversation_id: str, state: str, error: str | None = None) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE analysis_status SET state = ?, error = ?, finished_at = ? WHERE conversation_id = ?",
+            (state, error, _now(), conversation_id),
+        )
+
+
+def reset_stale_statuses() -> int:
+    # ! После рестарта задачи в памяти потеряны: всё, что было в работе, помечаем упавшим, чтобы можно было повторить
     with connect() as conn:
         cur = conn.execute(
-            f"""INSERT INTO appeals (evaluation_id, criterion_id, comment, status, decision, new_answer, reason, created_at, resolved_at)
-                SELECT ?, criterion_id, comment, status, decision, new_answer, reason, created_at, resolved_at
-                FROM appeals WHERE evaluation_id = ? AND status = 'resolved' AND criterion_id IN ({marks}) ORDER BY id""",
-            (to_evaluation_id, from_evaluation_id, *criteria_ids),
+            "UPDATE analysis_status SET state = 'failed', error = 'сервер перезапущен во время анализа', finished_at = ? "
+            "WHERE state IN ('queued', 'running')",
+            (_now(),),
         )
         return cur.rowcount
+
+
+def list_statuses(states: tuple[str, ...], dataset: str | None = None) -> list[dict[str, Any]]:
+    marks = ",".join("?" * len(states))
+    sql = f"""SELECT s.*, c.source_id, c.dataset FROM analysis_status s JOIN conversations c ON c.id = s.conversation_id
+              WHERE s.state IN ({marks}) {{extra}} ORDER BY s.queued_at, c.seq"""
+    extra, params = ("AND c.dataset = ?", (*states, dataset)) if dataset else ("", states)
+    with connect() as conn:
+        return _rows(conn.execute(sql.format(extra=extra), params).fetchall())
+
+
+def recent_durations(model: str, limit: int = 20) -> list[float]:
+    # * Длительность последних успешных оценок модели — основа для ETA
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT json_extract(meta, '$.total_seconds') FROM evaluations
+               WHERE json_extract(meta, '$.model') = ? AND json_extract(meta, '$.total_seconds') IS NOT NULL
+               ORDER BY id DESC LIMIT ?""",
+            (model, limit),
+        ).fetchall()
+    return [float(r[0]) for r in rows]
+
+
+AUTO_SORT_SQL = {
+    "date_asc": "c.imported_at ASC, c.seq ASC",
+    "date_desc": "c.imported_at DESC, c.seq DESC",
+    "size_asc": "messages ASC, c.imported_at ASC, c.seq ASC",
+    "size_desc": "messages DESC, c.imported_at ASC, c.seq ASC",
+}
+
+
+def auto_candidates(sort: str, dataset: str | None, excluded_channels: list[str], limit: int = 1) -> list[dict[str, Any]]:
+    # ** Только диалоги без оценки и без статуса: упавшие/пропущенные воркер не трогает (повтор — вручную)
+    order = AUTO_SORT_SQL[sort]
+    excluded = [c.strip().lower() for c in excluded_channels]
+    marks = ",".join("?" * len(excluded)) or "''"
+    sql = f"""SELECT c.id AS conversation_id, c.id, c.source_id, c.dataset, c.seq, c.imported_at,
+                     json_array_length(c.transcript) AS messages
+              FROM conversations c LEFT JOIN analysis_status s ON s.conversation_id = c.id
+              WHERE s.conversation_id IS NULL
+                AND NOT EXISTS (SELECT 1 FROM evaluations e WHERE e.conversation_id = c.id)
+                AND lower(trim(COALESCE(c.channel, ''))) NOT IN ({marks}) {{extra}}
+              ORDER BY {order} LIMIT ?"""
+    extra, params = ("AND c.dataset = ?", [*excluded, dataset]) if dataset else ("", list(excluded))
+    with connect() as conn:
+        return _rows(conn.execute(sql.format(extra=extra), [*params, limit]).fetchall())

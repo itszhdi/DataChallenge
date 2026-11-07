@@ -60,7 +60,7 @@
     },
     {
       "id": "c06_flow", "section": "flow", "title": "Управление диалогом, скорость и грамотность", "type": "scale",
-      "weight": 15, "na_allowed": false, "na_condition": "",
+      "weight": 15, "na_allowed": false, "na_condition": "", "uses_timing": true,
       "rule": "Оцените ясность, порядок ответов и предупреждение об ожидании по шкале.",
       "scale": [
         {"value": 10, "description": "Ответы ясные и связные. Если было явное ожидание, оператор предупредил."},

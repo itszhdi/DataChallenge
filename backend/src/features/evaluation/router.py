@@ -3,8 +3,9 @@ import asyncio
 from fastapi import APIRouter, status
 
 from src import db
-from src.dependencies import LLMDep
+from src.dependencies import LLMDep, RegistryDep
 from src.features.evaluation import jobs, service
+from src.features.evaluation.queue import build_queue
 from src.features.evaluation.exceptions import ConversationNotFound, JobNotFound, NoActiveChecklist
 from src.features.evaluation.schemas import BatchRequest, EvaluateRequest
 from src.llm.prompts import preview
@@ -14,16 +15,29 @@ router = APIRouter(tags=["evaluation"])
 
 @router.post("/evaluate")
 async def evaluate(body: EvaluateRequest, llm: LLMDep) -> dict:
-    evaluation_id = await service.evaluate_conversation(llm, body.conversation_id)
+    evaluation_id = await service.tracked(llm, body.conversation_id, service.evaluate_conversation)
     return await asyncio.to_thread(service.build_card, evaluation_id)
 
 
 @router.post("/evaluate/batch", status_code=status.HTTP_202_ACCEPTED)
-async def evaluate_batch(body: BatchRequest, llm: LLMDep) -> dict:
-    ids = await asyncio.to_thread(service.resolve_batch_ids, body.conversation_ids, body.dataset, body.only_missing)
-    job = jobs.create_job(body.mode, len(ids))
-    jobs.spawn(service.run_batch(llm, job, ids, body.mode))
+async def evaluate_batch(body: BatchRequest, registry: RegistryDep) -> dict:
+    ids = await asyncio.to_thread(
+        service.resolve_batch_ids, body.conversation_ids, body.dataset, body.only_missing, body.only_failed
+    )
+    job = jobs.create_job(body.mode, len(ids), registry.active().model)
+    jobs.spawn(service.run_batch(registry, job, ids, body.mode))
     return job
+
+
+@router.get("/jobs")
+async def list_jobs(active: bool = False) -> list[dict]:
+    # * Для восстановления прогресса после перезагрузки страницы
+    return jobs.list_jobs(active)
+
+
+@router.get("/queue")
+async def get_queue(llm: LLMDep, dataset: str | None = None) -> dict:
+    return await asyncio.to_thread(build_queue, llm, dataset)
 
 
 @router.get("/jobs/{job_id}")

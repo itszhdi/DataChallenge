@@ -46,37 +46,70 @@ def format_offset(seconds: float | None) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
+# * Системные события «диалог передан оператору» на RU/KZ/EN (из реальных данных DEV + типовые формулировки)
+JOIN_PATTERNS = (
+    "эскалация на оператора", "переведен на оператора", "переведён на оператора", "оператор подключ", "агент присоедин",
+    "присоединился к разговору", "операторға жіберілді", "операторға қосылды", "transferred to an agent",
+    "transferred to an operator", "agent joined", "operator joined",
+)
+
+
+def is_join_event(msg: dict[str, Any]) -> bool:
+    text = (msg.get("text") or "").lower()
+    return msg.get("speaker") == "system" and any(p in text for p in JOIN_PATTERNS)
+
+
+def _gap(later: dict[str, Any], earlier: dict[str, Any]) -> float | None:
+    if later["offset_sec"] is None or earlier["offset_sec"] is None:
+        return None
+    return round(later["offset_sec"] - earlier["offset_sec"], 1)
+
+
 def timing_facts(transcript: list[dict[str, Any]], threshold_sec: int = 180) -> dict[str, Any]:
-    # * Факты для модели: первая реакция оператора и долгие паузы клиент→оператор
+    # ** Ожидание оператора считается от его подключения: время общения клиента с ботом — не вина оператора
     msgs = with_offsets(transcript)
-    first_client = next((m for m in msgs if m["speaker"] == "client"), None)
-    first_reply = None
-    if first_client:
-        first_reply = next((m for m in msgs if m["speaker"] == "operator" and m["index"] > first_client["index"]), None)
+    is_op = lambda m: m.get("speaker") == "operator" and (m.get("text") or "").strip()  # noqa: E731
+    first_reply = next((m for m in msgs if is_op(m)), None)
+    before = msgs[: first_reply["index"] - 1] if first_reply else msgs
 
-    first_delay = None
-    if first_client and first_reply and None not in (first_client["offset_sec"], first_reply["offset_sec"]):
-        first_delay = round(first_reply["offset_sec"] - first_client["offset_sec"], 1)
+    join = next((m for m in before if is_join_event(m)), None)
+    anchor, anchor_kind = join, "join"
+    if join is None:
+        # * Нет события передачи — берём первую реплику клиента после последней реплики бота
+        last_bot = max((m["index"] for m in before if m.get("speaker") == "bot"), default=0)
+        anchor = next((m for m in before if m.get("speaker") == "client" and m["index"] > last_bot), None)
+        anchor_kind = "client"
 
-    # ** Пауза считается от самой ранней неотвеченной реплики клиента до следующего ответа оператора
+    first_delay = _gap(first_reply, anchor) if first_reply and anchor else None
+    if first_delay is not None and first_delay < 0:
+        first_delay = None
+    start_index = anchor["index"] if anchor else (first_reply["index"] if first_reply else 1)
+
+    # ** Пауза — от самой ранней неотвеченной реплики клиента до следующего ответа оператора, только после подключения
     long_pauses = []
     pending = None
     for m in msgs:
-        if m["speaker"] == "client" and pending is None:
+        if m["index"] < start_index:
+            continue
+        if m.get("speaker") == "client" and pending is None:
             pending = m
-        elif m["speaker"] == "operator" and pending is not None:
-            if None not in (m["offset_sec"], pending["offset_sec"]):
-                gap = round(m["offset_sec"] - pending["offset_sec"], 1)
-                if gap > threshold_sec:
-                    long_pauses.append({"client_index": pending["index"], "operator_index": m["index"], "seconds": gap})
+        elif is_op(m) and pending is not None:
+            gap = _gap(m, pending)
+            if gap is not None and gap > threshold_sec:
+                long_pauses.append({"client_index": pending["index"], "operator_index": m["index"], "seconds": gap})
             pending = None
 
+    missing_time = sum(1 for m in msgs if m["offset_sec"] is None)
     return {
         "threshold_sec": threshold_sec,
-        "first_client_index": first_client["index"] if first_client else None,
+        "operator_joined_index": join["index"] if join else None,
+        "anchor_index": anchor["index"] if anchor else None,
+        "anchor_kind": anchor_kind if anchor else None,
+        "first_client_index": anchor["index"] if anchor else None,
         "first_operator_reply_index": first_reply["index"] if first_reply else None,
         "first_response_sec": first_delay,
         "first_response_exceeded": first_delay is not None and first_delay > threshold_sec,
         "long_pauses": long_pauses,
-        "duration_sec": msgs[-1]["offset_sec"] if msgs else None,
+        "missing_time": missing_time,
+        "duration_sec": next((m["offset_sec"] for m in reversed(msgs) if m["offset_sec"] is not None), None),
     }

@@ -9,7 +9,7 @@ from typing import Any
 import openai
 from openai import AsyncOpenAI
 
-from src.config.settings import Settings
+from src.config.settings import LLMProfile, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,17 @@ RATE_LIMIT_BASE_PAUSE_SEC = 15
 
 class LLMError(Exception):
     pass
+
+
+def _error_text(e: openai.APIStatusError) -> str:
+    # * У 429 str(e) — только код; причина (квота RPM/RPD, модель) лежит в теле ответа
+    body = e.body
+    if isinstance(body, list) and body:
+        body = body[0]
+    if isinstance(body, dict):
+        err = body.get("error", body)
+        body = err.get("message", err) if isinstance(err, dict) else err
+    return str(body or e)[:400]
 
 
 def gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -54,18 +65,19 @@ def extract_json(text: str) -> dict[str, Any]:
 
 
 class LLMClient:
-    def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-        self.provider = settings.llm_provider
-        self.model = settings.llm_model
+    def __init__(self, profile: LLMProfile, prices: dict[str, list[float]] | None = None) -> None:
+        self.profile = profile
+        self.prices = prices or {}
+        self.provider = profile.provider
+        self.model = profile.model
         # ** Встроенные ретраи SDK выключены — повторы и паузы контролируем сами
         self.client = AsyncOpenAI(
-            api_key=settings.llm_api_key or "not-set",
-            base_url=settings.resolved_base_url,
-            timeout=settings.llm_timeout_sec,
+            api_key=profile.api_key or "not-set",
+            base_url=profile.base_url,
+            timeout=profile.timeout_sec,
             max_retries=0,
         )
-        self._semaphore = asyncio.Semaphore(max(1, settings.llm_concurrency))
+        self._semaphore = asyncio.Semaphore(max(1, profile.concurrency))
         self._throttle_lock = asyncio.Lock()
         self._last_call = 0.0
 
@@ -73,13 +85,13 @@ class LLMClient:
         await self.client.close()
 
     def cost_usd(self, prompt_tokens: int, completion_tokens: int) -> float:
-        price_in, price_out = (self.settings.llm_prices.get(self.model) or [0.0, 0.0])[:2]
+        price_in, price_out = (self.prices.get(self.model) or [0.0, 0.0])[:2]
         return round((prompt_tokens * price_in + completion_tokens * price_out) / 1_000_000, 6)
 
     async def _throttle(self) -> None:
         # * Глобальный минимальный интервал между запросами (бесплатный Gemini ~10 запросов/мин)
         async with self._throttle_lock:
-            wait = self._last_call + self.settings.llm_min_interval_sec - time.monotonic()
+            wait = self._last_call + self.profile.min_interval_sec - time.monotonic()
             if wait > 0:
                 await asyncio.sleep(wait)
             self._last_call = time.monotonic()
@@ -95,13 +107,15 @@ class LLMClient:
                 "json_schema": {"name": "evaluation", "strict": True, "schema": send_schema},
             },
         }
-        if self.settings.llm_reasoning_effort:
-            kwargs["reasoning_effort"] = self.settings.llm_reasoning_effort
+        if self.profile.reasoning_effort:
+            kwargs["reasoning_effort"] = self.profile.reasoning_effort
         return kwargs
 
     async def complete_json(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-        if self.provider == "gemini" and not self.settings.llm_api_key:
+        if self.provider == "gemini" and not self.profile.api_key:
             raise LLMError("LLM_API_KEY не задан в .env")
+        if not self.model:
+            raise LLMError(f"Модель для профиля {self.profile.name} не задана в .env")
 
         kwargs = self._request_kwargs(messages, schema)
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -109,7 +123,7 @@ class LLMClient:
         started = time.monotonic()
 
         async with self._semaphore:
-            while attempts <= self.settings.llm_retries:
+            while attempts <= self.profile.retries:
                 attempts += 1
                 await self._throttle()
                 try:
@@ -119,10 +133,12 @@ class LLMClient:
                     rate_limited += 1
                     attempts -= 1
                     if rate_limited > RATE_LIMIT_ATTEMPTS:
-                        last_error = f"rate limit: {e}"
+                        last_error = f"rate limit: {_error_text(e)}"
                         break
                     pause = RATE_LIMIT_BASE_PAUSE_SEC * rate_limited
-                    logger.warning("LLM rate limited (429), retry %d/%d in %ds", rate_limited, RATE_LIMIT_ATTEMPTS, pause)
+                    logger.warning(
+                        "LLM rate limited (429), retry %d/%d in %ds: %s", rate_limited, RATE_LIMIT_ATTEMPTS, pause, _error_text(e)
+                    )
                     await asyncio.sleep(pause)
                     continue
                 except (openai.APIConnectionError, openai.APITimeoutError, openai.InternalServerError) as e:
@@ -148,6 +164,7 @@ class LLMClient:
                     continue
 
                 meta = {
+                    "profile": self.profile.name,
                     "provider": self.provider,
                     "model": self.model,
                     "seconds": round(time.monotonic() - started, 2),
@@ -164,3 +181,34 @@ class LLMClient:
 
         logger.error("LLM call failed after %d attempts: %s", attempts, last_error)
         raise LLMError(f"Модель не ответила корректно: {last_error}")
+
+    async def ping(self) -> dict[str, Any]:
+        # * Быстрая проверка доступности: список моделей сервера (для LM Studio — запущен ли и загружена ли модель)
+        try:
+            models = await self.client.with_options(timeout=5).models.list()
+            ids = [m.id for m in models.data]
+        except openai.OpenAIError as e:
+            return {"available": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+        loaded = self.model in ids or any(i.endswith(self.model) for i in ids) if self.provider != "gemini" else True
+        return {"available": True, "model_loaded": loaded, "models": ids[:20] if self.provider != "gemini" else []}
+
+
+class LLMRegistry:
+    # ** Все профили создаются при старте; активный меняется из /api/settings без рестарта
+    def __init__(self, settings: Settings, active: str | None = None) -> None:
+        self.clients = {name: LLMClient(p, settings.llm_prices) for name, p in settings.llm_profiles().items()}
+        self.active_name = active if active in self.clients else settings.default_llm_profile
+
+    def use(self, name: str) -> None:
+        if name not in self.clients:
+            raise KeyError(name)
+        if name != self.active_name:
+            logger.info("LLM profile switched: %s -> %s (model=%s)", self.active_name, name, self.clients[name].model)
+        self.active_name = name
+
+    def active(self) -> LLMClient:
+        return self.clients[self.active_name]
+
+    async def close(self) -> None:
+        for c in self.clients.values():
+            await c.close()

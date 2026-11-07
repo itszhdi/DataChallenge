@@ -12,3 +12,5 @@ class BatchRequest(BaseModel):
     dataset: str | None = None
     mode: Literal["evaluate", "reapply"] = "evaluate"
     only_missing: bool = False
+    # * Повтор только упавших (статус failed) — ручной Retry
+    only_failed: bool = False

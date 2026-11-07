@@ -10,6 +10,7 @@ from src import db
 from src.config.settings import get_settings
 from src.features.checklists.service import diff_checklists
 from src.features.evaluation import jobs
+from src.features.evaluation.queue import build_queue, eta_by_conversation
 from src.features.evaluation.exceptions import (
     ChannelExcluded,
     ConversationNotFound,
@@ -20,7 +21,7 @@ from src.features.evaluation.exceptions import (
 )
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
-from src.llm.client import LLMClient, LLMError
+from src.llm.client import LLMClient, LLMError, LLMRegistry
 from src.llm.prompts import build_messages, build_schema, ground_answers, select_criteria
 
 logger = logging.getLogger(__name__)
@@ -135,12 +136,27 @@ async def evaluate_conversation(llm: LLMClient, conversation_id: str) -> int:
     if not checklist:
         raise NoActiveChecklist()
 
+    previous_id = await asyncio.to_thread(db.latest_evaluation_id, conversation_id)
     started = time.monotonic()
     answers, meta = await run_llm(llm, checklist["data"], conversation, select_criteria(checklist["data"]))
     meta["total_seconds"] = round(time.monotonic() - started, 2)
+    meta["previous_evaluation_id"] = previous_id
     evaluation_id = await asyncio.to_thread(db.insert_evaluation, conversation_id, checklist["id"], answers, meta)
+    if previous_id:
+        await asyncio.to_thread(carry_appeals, previous_id, evaluation_id, checklist["data"])
     logger.info("Conversation %s evaluated: evaluation_id=%s checklist_id=%s", conversation_id, evaluation_id, checklist["id"])
     return evaluation_id
+
+
+def carry_appeals(from_id: int, to_id: int, active: dict[str, Any], diff: dict[str, Any] | None = None) -> dict[str, int]:
+    # * Решения апелляций сохраняются только для критериев, чья формулировка не менялась
+    if diff is None:
+        old = db.get_evaluation(from_id)
+        diff = diff_checklists(db.get_checklist(old["checklist_id"])["data"], active)
+    result = db.carry_appeals(from_id, to_id, diff["same"] + diff["weight_only"], [c["id"] for c in active["criteria"]])
+    if any(result.values()):
+        logger.info("Appeals carried from evaluation %s to %s: %s", from_id, to_id, result)
+    return result
 
 
 def build_card(evaluation_id: int) -> dict[str, Any]:
@@ -184,10 +200,12 @@ def summarize_latest(dataset: str | None = None) -> dict[str, dict[str, Any]]:
     return out
 
 
-def list_conversations_with_scores(dataset: str | None = None) -> list[dict[str, Any]]:
+def list_conversations_with_scores(dataset: str | None = None, llm: LLMClient | None = None) -> list[dict[str, Any]]:
     items = db.list_conversations(dataset)
     summary = summarize_latest(dataset)
+    eta = eta_by_conversation(build_queue(llm, dataset)) if llm else {}
     for item in items:
+        item["eta_sec"] = eta.get(item["id"])
         s = summary.get(item["id"])
         item["total"] = s["score"]["total"] if s else None
         item["preliminary"] = s["score"]["preliminary"] if s else None
@@ -234,11 +252,14 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
     meta["warnings"] = old_warnings
 
     new_id = await asyncio.to_thread(db.insert_evaluation, old["conversation_id"], active["id"], answers, meta, evaluation_id)
-    await asyncio.to_thread(db.copy_resolved_appeals, evaluation_id, new_id, copied)
+    meta_appeals = await asyncio.to_thread(carry_appeals, evaluation_id, new_id, active["data"], diff)
     logger.info(
         "Evaluation %s reapplied as %s: copied=%d llm_criteria=%s", evaluation_id, new_id, len(copied), needs or "none",
     )
-    return {"evaluation_id": new_id, "parent_id": evaluation_id, "unchanged": False, "llm_called": bool(needs), "diff": diff}
+    return {
+        "evaluation_id": new_id, "parent_id": evaluation_id, "unchanged": False, "llm_called": bool(needs), "diff": diff,
+        "appeals": meta_appeals,
+    }
 
 
 async def reapply_conversation(llm: LLMClient, conversation_id: str) -> int:
@@ -265,26 +286,63 @@ async def reapply_many(llm: LLMClient, dataset: str | None) -> dict[str, Any]:
     return {"total": len(latest), "done": done, "failed": failed}
 
 
-async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
-    # ** Параллелизм ограничивает сам LLM-клиент (LLM_CONCURRENCY + троттлинг), здесь просто запускаем всё
+def _status_key(conversation_id: str) -> str | None:
+    conv = db.get_conversation(conversation_id)
+    return conv["id"] if conv else None
+
+
+SKIP_ERRORS = (ChannelExcluded, NotEvaluable, NothingToReapply)
+
+
+async def tracked(llm: LLMClient, conversation_id: str, action, source: str = "manual", job_id: str | None = None) -> int:
+    # ** Единая точка записи статуса анализа: ручной запуск, пакет и воркер видны в UI одинаково
+    key = await asyncio.to_thread(_status_key, conversation_id)
+    if not key:
+        return await action(llm, conversation_id)
+    await asyncio.to_thread(db.start_status, key, source, job_id, llm.model)
+    try:
+        result = await action(llm, key)
+    except SKIP_ERRORS as e:
+        await asyncio.to_thread(db.finish_status, key, "skipped", getattr(e, "detail", None) or str(e))
+        raise
+    except HTTPException as e:
+        await asyncio.to_thread(db.finish_status, key, "failed", str(e.detail))
+        raise
+    except Exception as e:
+        await asyncio.to_thread(db.finish_status, key, "failed", f"{type(e).__name__}: {e}")
+        raise
+    await asyncio.to_thread(db.finish_status, key, "done")
+    return result
+
+
+async def run_batch(registry: LLMRegistry, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
+    # ** Пул из LLM_CONCURRENCY воркеров: статус running ставится только когда диалог реально ушёл в модель
     action = evaluate_conversation if mode == "evaluate" else reapply_conversation
+    await asyncio.to_thread(db.queue_statuses, conversation_ids, "batch", job["id"])
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    for cid in conversation_ids:
+        queue.put_nowait(cid)
 
-    async def one(cid: str) -> None:
-        try:
-            evaluation_id = await action(llm, cid)
-            job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
-        except (ChannelExcluded, NotEvaluable, NothingToReapply) as e:
-            job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e)})
-        except HTTPException as e:
-            job["failed"].append({"conversation_id": cid, "reason": e.detail})
-        except Exception as e:
-            logger.exception("Batch job %s: conversation %s crashed", job["id"], cid)
-            job["failed"].append({"conversation_id": cid, "reason": f"{type(e).__name__}: {e}"})
-        finally:
-            job["processed"] += 1
+    async def worker() -> None:
+        while not queue.empty():
+            cid = queue.get_nowait()
+            llm = registry.active()
+            try:
+                evaluation_id = await tracked(llm, cid, action, "batch", job["id"])
+                job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
+            except SKIP_ERRORS as e:
+                job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e)})
+            except HTTPException as e:
+                job["failed"].append({"conversation_id": cid, "reason": e.detail})
+            except Exception as e:
+                logger.exception("Batch job %s: conversation %s crashed", job["id"], cid)
+                job["failed"].append({"conversation_id": cid, "reason": f"{type(e).__name__}: {e}"})
+            finally:
+                job["processed"] += 1
 
-    logger.info("Batch job %s (%s) started: %d conversations", job["id"], mode, len(conversation_ids))
-    await asyncio.gather(*(one(cid) for cid in conversation_ids))
+    workers = max(1, registry.active().profile.concurrency)
+    logger.info("Batch job %s (%s) started: %d conversations, %d workers", job["id"], mode, len(conversation_ids), workers)
+    await asyncio.gather(*(worker() for _ in range(workers)))
     jobs.finish(job)
     logger.info(
         "Batch job %s finished: done=%d failed=%d skipped=%d",
@@ -292,11 +350,17 @@ async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[
     )
 
 
-def resolve_batch_ids(conversation_ids: list[str] | None, dataset: str | None, only_missing: bool) -> list[str]:
+def resolve_batch_ids(
+    conversation_ids: list[str] | None, dataset: str | None, only_missing: bool, only_failed: bool = False
+) -> list[str]:
     items = db.list_conversations(dataset)
     if conversation_ids is not None:
         wanted = set(conversation_ids)
         items = [i for i in items if i["id"] in wanted or i["source_id"] in wanted]
     if only_missing:
         items = [i for i in items if not i["last_evaluation_id"]]
+    if only_failed:
+        items = [i for i in items if i["status"] == "failed"]
+    # * Уже стоящие в очереди или в работе диалоги второй раз не ставим
+    items = [i for i in items if i["status"] not in ("queued", "running")]
     return [i["id"] for i in items]

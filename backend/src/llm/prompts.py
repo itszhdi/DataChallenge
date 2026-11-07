@@ -252,20 +252,27 @@ EN: greeting «Hello / Good morning», name «My name is …», empathy «I'm so
 
 def render_timing(facts: dict[str, Any]) -> str:
     thr = facts["threshold_sec"]
-    lines = [f"Порог первой реакции: {thr} с ({thr // 60} мин)."]
-    if facts["first_response_sec"] is None:
-        lines.append("Первая реакция оператора на клиента: не определена (нет ответа оператора после реплики клиента или нет времени).")
+    lines = [f"Порог первой реакции: {thr} с ({thr // 60} мин). Отсчёт — с момента подключения оператора, время общения с ботом не учитывается."]
+    if facts["operator_joined_index"]:
+        lines.append(f"Диалог передан оператору: #{facts['operator_joined_index']}.")
+    if facts["first_operator_reply_index"] is None:
+        lines.append("Ответов оператора нет.")
+    elif facts["first_response_sec"] is None:
+        lines.append(f"Первая реакция оператора: #{facts['first_operator_reply_index']}, время ожидания не определено (оператор начал первым или нет времени).")
     else:
         verdict = "ПРЕВЫШЕН" if facts["first_response_exceeded"] else "не превышен"
+        since = "подключения оператора" if facts["anchor_kind"] == "join" else "реплики клиента"
         lines.append(
             f"Первая реакция оператора: #{facts['first_operator_reply_index']} через {facts['first_response_sec']:.0f} с "
-            f"после первой реплики клиента #{facts['first_client_index']} — порог {verdict}."
+            f"после {since} #{facts['anchor_index']} — порог {verdict}."
         )
     if facts["long_pauses"]:
         pauses = "; ".join(f"#{p['client_index']}→#{p['operator_index']}: {p['seconds']:.0f} с" for p in facts["long_pauses"])
         lines.append(f"Паузы клиент→оператор дольше порога: {pauses}. Проверь, предупреждал ли оператор об ожидании.")
     else:
         lines.append("Пауз клиент→оператор дольше порога нет.")
+    if facts.get("missing_time"):
+        lines.append(f"У {facts['missing_time']} реплик нет времени — по ним скорость не оценивай.")
     return "\n".join(lines)
 
 
