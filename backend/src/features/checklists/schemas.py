@@ -22,6 +22,8 @@ class Criterion(BaseModel):
     examples_pass: list[str] = []
     examples_fail: list[str] = []
     flag_types: list[str] = []
+    # * Критерий опирается на факты о времени: при смене порога первой реакции его переоценивает модель
+    uses_timing: bool = False
 
     @model_validator(mode="after")
     def check_consistency(self) -> "Criterion":

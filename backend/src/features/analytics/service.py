@@ -51,7 +51,8 @@ def build_analytics(dataset: str | None = None) -> dict[str, Any]:
         stat["avg_fulfillment_pct"] = _avg(pct)
 
     worst = sorted(
-        ({"conversation_id": cid, "evaluation_id": s["evaluation"]["id"], "total": s["score"]["total"]}
+        ({"id": cid, "conversation_id": s["evaluation"].get("source_id") or cid,
+          "evaluation_id": s["evaluation"]["id"], "total": s["score"]["total"]}
          for cid, s in summary.items() if s["score"]["total"] is not None),
         key=lambda x: x["total"],
     )[:WORST_LIMIT]
@@ -87,8 +88,11 @@ def _dialog_row(cid: str, data: dict[str, Any]) -> dict[str, Any]:
     e, score = data["evaluation"], data["score"]
     criteria = {i["id"]: {"answer": i["answer"], "percent": _percent(i)} for i in score["criteria"]}
     weak = [(p, -i["weight"], i["id"]) for i in score["criteria"] if (p := criteria[i["id"]]["percent"]) is not None and p < 100]
+    # * conversation_id — исходный id для показа, id — составной ключ для перехода в карточку
     return {
-        "conversation_id": cid,
+        "id": cid,
+        "conversation_id": e.get("source_id") or cid,
+        "dataset": e.get("dataset"),
         "evaluation_id": e["id"],
         "language": e.get("language"),
         "channel": e.get("channel"),

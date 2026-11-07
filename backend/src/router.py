@@ -9,6 +9,7 @@ from src.features.datasets.router import router as datasets_router
 from src.features.evaluation.router import router as evaluation_router
 from src.features.export.router import router as export_router
 from src.features.settings.router import router as settings_router
+from src.features.worker.router import router as worker_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(datasets_router)
@@ -20,9 +21,10 @@ api_router.include_router(analytics_router)
 api_router.include_router(export_router)
 api_router.include_router(audio_router)
 api_router.include_router(settings_router)
+api_router.include_router(worker_router)
 
 
 @api_router.get("/health", tags=["system"])
 async def health(request: Request) -> dict:
-    settings = request.state.settings
-    return {"status": "ok", "provider": settings.llm_provider, "model": settings.llm_model}
+    llm = request.state.llm.active()
+    return {"status": "ok", "profile": llm.profile.name, "provider": llm.provider, "model": llm.model}

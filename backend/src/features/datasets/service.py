@@ -37,18 +37,35 @@ def extract_records(payload: Any) -> tuple[str | None, list[Any]]:
 def import_payload(payload: Any, dataset: str | None = None) -> ImportResult:
     group_id, raw_records = extract_records(payload)
     dataset = dataset or group_id or "UPLOAD"
-    valid, errors = [], []
+    valid: dict[str, dict[str, Any]] = {}
+    errors, warnings = [], []
     for i, raw in enumerate(raw_records):
         try:
-            valid.append(Record.model_validate(raw).model_dump())
+            record = Record.model_validate(raw).model_dump()
         except ValidationError as e:
             cid = raw.get("conversation_id", f"#{i}") if isinstance(raw, dict) else f"#{i}"
-            errors.append(f"{cid}: {e.errors()[0]['msg']}")
-    imported = db.upsert_conversations(dataset, valid) if valid else 0
-    logger.info("Dataset %s imported: %d ok, %d skipped", dataset, imported, len(errors))
+            errors.append(f"{cid}: {e.errors()[0]['loc'][0]} — {e.errors()[0]['msg']}")
+            continue
+        cid, tr = record["conversation_id"], record["transcript"]
+        if cid in valid:
+            warnings.append(f"{cid}: повтор id в файле — оставлена последняя запись")
+        if not tr:
+            hint = "будет распознан из записи" if record.get("audio_url") else "оценка невозможна"
+            warnings.append(f"{cid}: пустой транскрипт — {hint}")
+        notes = [
+            (sum(1 for m in tr if m.get("attachments")), "вложений"),
+            (sum(1 for m in tr if m["speaker"] == "unknown"), "реплик с неизвестной ролью"),
+            (sum(1 for m in tr if m.get("empty")), "пустых реплик"),
+            (sum(1 for m in tr if not m.get("timestamp")), "реплик без времени"),
+        ]
+        warnings += [f"{cid}: {n} {label}" for n, label in notes if n]
+        record["seq"] = i
+        valid[cid] = record
+    imported = db.upsert_conversations(dataset, list(valid.values())) if valid else 0
+    logger.info("Dataset %s imported: %d ok, %d skipped, %d warnings", dataset, imported, len(errors), len(warnings))
     if errors:
         logger.warning("Dataset %s skipped records: %s", dataset, errors[:10])
-    return ImportResult(dataset=dataset, imported=imported, skipped=len(errors), errors=errors)
+    return ImportResult(dataset=dataset, imported=imported, skipped=len(errors), errors=errors, warnings=warnings)
 
 
 async def fetch_payload(group_id: str | None, url: str | None = None) -> Any:

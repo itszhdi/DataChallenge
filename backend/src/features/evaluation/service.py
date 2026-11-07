@@ -10,6 +10,7 @@ from src import db
 from src.config.settings import get_settings
 from src.features.checklists.service import diff_checklists
 from src.features.evaluation import jobs
+from src.features.evaluation.queue import build_queue, eta_by_conversation
 from src.features.evaluation.exceptions import (
     ChannelExcluded,
     ConversationNotFound,
@@ -17,13 +18,15 @@ from src.features.evaluation.exceptions import (
     JobAlreadyRunning,
     LLMUnavailable,
     NoActiveChecklist,
+    NotEvaluable,
 )
 from src.features.evaluation.operator_summary import build_operator_summary
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
 from src.features.settings.schemas import QueueSort
 from src.features.settings.service import load_app_settings
-from src.llm.client import LLMClient, LLMError
+from src.features.transcription.service import prepare_transcript
+from src.llm.client import LLMClient, LLMError, LLMRegistry
 from src.llm.prompts import PROMPT_VERSION, build_messages, build_schema, ground_answers, select_criteria
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,15 @@ logger = logging.getLogger(__name__)
 def is_excluded(conversation: dict[str, Any]) -> bool:
     excluded = {c.strip().lower() for c in get_settings().exclude_channels}
     return (conversation.get("channel") or "").strip().lower() in excluded
+
+
+def check_evaluable(conversation: dict[str, Any]) -> None:
+    # ** Пустой диалог или диалог без оператора не отправляем в модель: оценивать нечего
+    transcript = conversation.get("transcript") or []
+    if not transcript:
+        raise NotEvaluable("пустой транскрипт")
+    if not any(m.get("speaker") == "operator" and (m.get("text") or "").strip() for m in transcript):
+        raise NotEvaluable("в диалоге нет реплик оператора")
 
 
 def validate_answers(
@@ -147,16 +159,45 @@ async def evaluate_conversation(llm: LLMClient, conversation_id: str) -> int:
     if is_excluded(conversation):
         logger.info("Conversation %s skipped: excluded channel %s", conversation_id, conversation["channel"])
         raise ChannelExcluded(conversation["channel"])
+    # ** Для звонков с записью — свой транскрипт из аудио (по настройке call_transcript)
+    call_transcript = (await asyncio.to_thread(load_app_settings)).call_transcript
+    transcript, source = await prepare_transcript(conversation, call_transcript)
+    conversation = {**conversation, "transcript": transcript}
+    check_evaluable(conversation)
+    conversation_id = conversation["id"]
     checklist = await asyncio.to_thread(db.get_active_checklist)
     if not checklist:
         raise NoActiveChecklist()
 
+    previous_id = await asyncio.to_thread(db.latest_evaluation_id, conversation_id)
     started = time.monotonic()
     answers, meta = await run_llm(llm, checklist["data"], conversation, select_criteria(checklist["data"]))
     meta["total_seconds"] = round(time.monotonic() - started, 2)
+    meta["previous_evaluation_id"] = previous_id
+    meta["transcript_source"] = source
+    if source == "asr":
+        # ! Снимок транскрипта: номера #N в ответах модели должны совпадать с карточкой даже после повторного распознавания
+        meta["transcript"] = transcript
     evaluation_id = await asyncio.to_thread(db.insert_evaluation, conversation_id, checklist["id"], answers, meta)
+    if previous_id:
+        await asyncio.to_thread(carry_appeals, previous_id, evaluation_id, checklist["data"])
     logger.info("Conversation %s evaluated: evaluation_id=%s checklist_id=%s", conversation_id, evaluation_id, checklist["id"])
     return evaluation_id
+
+
+def evaluated_transcript(evaluation: dict[str, Any], conversation: dict[str, Any]) -> list[dict[str, Any]]:
+    return evaluation["meta"].get("transcript") or conversation["transcript"]
+
+
+def carry_appeals(from_id: int, to_id: int, active: dict[str, Any], diff: dict[str, Any] | None = None) -> dict[str, int]:
+    # * Решения апелляций сохраняются только для критериев, чья формулировка не менялась
+    if diff is None:
+        old = db.get_evaluation(from_id)
+        diff = diff_checklists(db.get_checklist(old["checklist_id"])["data"], active)
+    result = db.carry_appeals(from_id, to_id, diff["same"] + diff["weight_only"], [c["id"] for c in active["criteria"]])
+    if any(result.values()):
+        logger.info("Appeals carried from evaluation %s to %s: %s", from_id, to_id, result)
+    return result
 
 
 def build_card(evaluation_id: int) -> dict[str, Any]:
@@ -173,7 +214,10 @@ def build_card(evaluation_id: int) -> dict[str, Any]:
     for score in (original, final):
         score["warnings"] = meta.get("warnings", []) + score["warnings"]
 
-    conversation["transcript"] = with_offsets(conversation["transcript"])
+    conversation["transcript"] = with_offsets(evaluated_transcript(evaluation, conversation))
+    conversation["transcript_source"] = meta.get("transcript_source", "original")
+    conversation.pop("transcript_asr", None)
+    meta = {k: v for k, v in meta.items() if k != "transcript"}
     return {
         "evaluation": {k: evaluation[k] for k in ("id", "conversation_id", "checklist_id", "parent_id", "created_at")},
         "checklist": {"id": checklist["id"], "version": checklist["version"], "name": checklist["name"], "is_active": checklist["is_active"]},
@@ -201,10 +245,12 @@ def summarize_latest(dataset: str | None = None) -> dict[str, dict[str, Any]]:
     return out
 
 
-def list_conversations_with_scores(dataset: str | None = None) -> list[dict[str, Any]]:
+def list_conversations_with_scores(dataset: str | None = None, llm: LLMClient | None = None) -> list[dict[str, Any]]:
     items = db.list_conversations(dataset)
     summary = summarize_latest(dataset)
+    eta = eta_by_conversation(build_queue(llm, dataset)) if llm else {}
     for item in items:
+        item["eta_sec"] = eta.get(item["id"])
         s = summary.get(item["id"])
         item["total"] = s["score"]["total"] if s else None
         item["preliminary"] = s["score"]["preliminary"] if s else None
@@ -237,11 +283,10 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
     old_warnings = [w for w in old["meta"].get("warnings", []) if w.split(":")[0] in copied]
     old_meta = old.get("meta") or {}
     inherited_versions = old_meta.get("criteria_prompt_versions") or {}
-    criteria_versions = {
-        cid: inherited_versions.get(cid, old_meta.get("prompt_version") or "unknown")
-        for cid in copied
-    }
+    criteria_versions = {cid: inherited_versions.get(cid, old_meta.get("prompt_version") or "unknown") for cid in copied}
     meta: dict[str, Any] = {
+        "transcript_source": old_meta.get("transcript_source", "original"),
+        **({"transcript": old_meta["transcript"]} if old_meta.get("transcript") else {}),
         "reapplied_from": evaluation_id,
         "copied": copied,
         "evaluated_criteria": needs,
@@ -255,6 +300,9 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
         conversation = await asyncio.to_thread(db.get_conversation, old["conversation_id"])
         if is_excluded(conversation):
             raise ChannelExcluded(conversation["channel"])
+        # ** Переоценка идёт по тому же транскрипту, что и исходная оценка
+        conversation = {**conversation, "transcript": evaluated_transcript(old, conversation)}
+        check_evaluable(conversation)
         criteria = select_criteria(active["data"], needs)
         new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)
         answers.update(new_answers)
@@ -266,15 +314,21 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
     meta["warnings"] = old_warnings
 
     new_id = await asyncio.to_thread(db.insert_evaluation, old["conversation_id"], active["id"], answers, meta, evaluation_id)
-    await asyncio.to_thread(db.copy_resolved_appeals, evaluation_id, new_id, copied)
+    meta_appeals = await asyncio.to_thread(carry_appeals, evaluation_id, new_id, active["data"], diff)
     logger.info(
         "Evaluation %s reapplied as %s: copied=%d llm_criteria=%s", evaluation_id, new_id, len(copied), needs or "none",
     )
-    return {"evaluation_id": new_id, "parent_id": evaluation_id, "unchanged": False, "llm_called": bool(needs), "diff": diff}
+    return {
+        "evaluation_id": new_id, "parent_id": evaluation_id, "unchanged": False, "llm_called": bool(needs), "diff": diff,
+        "appeals": meta_appeals,
+    }
 
 
 async def reapply_conversation(llm: LLMClient, conversation_id: str) -> int:
-    evaluation_id = await asyncio.to_thread(db.latest_evaluation_id, conversation_id)
+    conversation = await asyncio.to_thread(db.get_conversation, conversation_id)
+    if not conversation:
+        raise ConversationNotFound(conversation_id)
+    evaluation_id = await asyncio.to_thread(db.latest_evaluation_id, conversation["id"])
     if not evaluation_id:
         raise NothingToReapply("у диалога нет оценки")
     return (await reapply(llm, evaluation_id))["evaluation_id"]
@@ -294,22 +348,50 @@ async def reapply_many(llm: LLMClient, dataset: str | None) -> dict[str, Any]:
     return {"total": len(latest), "done": done, "failed": failed}
 
 
+def _status_key(conversation_id: str) -> str | None:
+    conv = db.get_conversation(conversation_id)
+    return conv["id"] if conv else None
+
+
+SKIP_ERRORS = (ChannelExcluded, NotEvaluable, NothingToReapply)
 # ** Эти сбои не зависят от диалога, поэтому пакет сразу останавливается
-STOP_BATCH_CODES = {"llm_unavailable", "llm_auth", "llm_model_not_found"}
+STOP_BATCH_CODES = {"llm_unavailable", "llm_auth", "llm_model_not_found", "llm_quota"}
 
 
-async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
-    # ** Воркеры берут id по порядку, поэтому очередь идёт в выбранной сортировке; число воркеров = лимит LLM-клиента
+async def tracked(llm: LLMClient, conversation_id: str, action, source: str = "manual", job_id: str | None = None) -> int:
+    # ** Единая точка записи статуса анализа: ручной запуск, пакет и воркер видны в UI одинаково
+    key = await asyncio.to_thread(_status_key, conversation_id)
+    if not key:
+        return await action(llm, conversation_id)
+    await asyncio.to_thread(db.start_status, key, source, job_id, llm.model)
+    try:
+        result = await action(llm, key)
+    except SKIP_ERRORS as e:
+        await asyncio.to_thread(db.finish_status, key, "skipped", getattr(e, "detail", None) or str(e))
+        raise
+    except HTTPException as e:
+        await asyncio.to_thread(db.finish_status, key, "failed", str(e.detail))
+        raise
+    except Exception as e:
+        await asyncio.to_thread(db.finish_status, key, "failed", f"{type(e).__name__}: {e}")
+        raise
+    await asyncio.to_thread(db.finish_status, key, "done")
+    return result
+
+
+async def run_batch(registry: LLMRegistry, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
+    # ** Воркеры берут id по порядку (очередь в выбранной сортировке); running ставится, только когда диалог ушёл в модель
     action = evaluate_conversation if mode == "evaluate" else reapply_conversation
+    await asyncio.to_thread(db.queue_statuses, conversation_ids, "batch", job["id"])
     fatal: dict[str, Any] | None = None
 
     async def one(cid: str) -> None:
         nonlocal fatal
         job["current"].append(cid)
         try:
-            evaluation_id = await action(llm, cid)
+            evaluation_id = await tracked(registry.active(), cid, action, "batch", job["id"])
             job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
-        except (ChannelExcluded, NothingToReapply) as e:
+        except SKIP_ERRORS as e:
             job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e), "code": e.code})
         except HTTPException as e:
             failure = {"conversation_id": cid, "reason": e.detail, "code": getattr(e, "code", "internal")}
@@ -330,12 +412,14 @@ async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[
             if fatal:
                 # ** Модель недоступна для всех: остальным диалогам незачем ждать повторы
                 job["failed"].append({**fatal, "conversation_id": cid})
+                await asyncio.to_thread(db.finish_status, cid, "failed", str(fatal["reason"]))
                 job["processed"] += 1
                 continue
             await one(cid)
 
-    logger.info("Batch job %s (%s) started: %d conversations", job["id"], mode, len(conversation_ids))
-    await asyncio.gather(*(worker() for _ in range(llm.concurrency)))
+    workers = registry.active().concurrency
+    logger.info("Batch job %s (%s) started: %d conversations, %d workers", job["id"], mode, len(conversation_ids), workers)
+    await asyncio.gather(*(worker() for _ in range(workers)))
     jobs.finish(job)
     logger.info(
         "Batch job %s finished: done=%d failed=%d skipped=%d",
@@ -351,25 +435,33 @@ QUEUE_ORDER: dict[QueueSort, tuple[str, bool]] = {
 }
 
 
-def resolve_batch_ids(conversation_ids: list[str] | None, dataset: str | None, only_missing: bool) -> list[str]:
+def resolve_batch_ids(
+    conversation_ids: list[str] | None, dataset: str | None, only_missing: bool, only_failed: bool = False
+) -> list[str]:
     app = load_app_settings()
     items = list_conversations_with_scores(dataset) if app.include_errors else db.list_conversations(dataset)
     if conversation_ids is not None:
         wanted = set(conversation_ids)
-        items = [i for i in items if i["id"] in wanted]
+        items = [i for i in items if i["id"] in wanted or i["source_id"] in wanted]
     if only_missing:
         # * Упавший диалог без оценки и так попадает в очередь; include_errors добавляет оценки с критериями без ответа
         items = [i for i in items if not i["last_evaluation_id"] or (app.include_errors and i["preliminary"])]
+    if only_failed:
+        items = [i for i in items if i["status"] == "failed"]
+    # * Уже стоящие в очереди или в работе диалоги второй раз не ставим
+    items = [i for i in items if i["status"] not in ("queued", "running")]
     key, reverse = QUEUE_ORDER[app.queue_sort]
+    items = sorted(items, key=lambda i: i["seq"], reverse=reverse)
     return [i["id"] for i in sorted(items, key=lambda i: i[key], reverse=reverse)]
 
 
 async def start_batch(
-    llm: LLMClient, dataset: str | None, mode: str = "evaluate", only_missing: bool = False, conversation_ids: list[str] | None = None
+    registry: LLMRegistry, dataset: str | None, mode: str = "evaluate", only_missing: bool = False,
+    conversation_ids: list[str] | None = None, only_failed: bool = False,
 ) -> dict[str, Any]:
     if jobs.current_job():
         raise JobAlreadyRunning()
-    ids = await asyncio.to_thread(resolve_batch_ids, conversation_ids, dataset, only_missing)
-    job = jobs.create_job(mode, ids)
-    jobs.spawn(run_batch(llm, job, ids, mode))
+    ids = await asyncio.to_thread(resolve_batch_ids, conversation_ids, dataset, only_missing, only_failed)
+    job = jobs.create_job(mode, ids, registry.active().model)
+    jobs.spawn(run_batch(registry, job, ids, mode))
     return job

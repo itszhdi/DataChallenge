@@ -55,7 +55,7 @@ def appeal_view(appeal: dict[str, Any]) -> dict[str, Any]:
     others = [a for a in db.list_appeals(evaluation_id=evaluation["id"]) if a["id"] != appeal["id"]]
     final = score_evaluation(checklist, apply_appeals(evaluation["answers"], others), conversation.get("channel"))
     item = next(i for i in final["criteria"] if i["id"] == appeal["criterion_id"])
-    transcript = with_offsets(conversation["transcript"])
+    transcript = with_offsets(evaluation["meta"].get("transcript") or conversation["transcript"])
     return {
         **appeal,
         "conversation_id": conversation["id"],

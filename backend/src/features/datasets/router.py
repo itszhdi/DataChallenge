@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, File, Query, UploadFile
 
 from src import db
-from src.dependencies import LLMDep
+from src.dependencies import RegistryDep
 from src.features.datasets import service
 from src.features.datasets.exceptions import InvalidDatasetPayload
 from src.features.datasets.schemas import ImportRequest, ImportResult, SourceCheck
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
-async def with_auto_evaluation(result: ImportResult, llm: LLMDep) -> ImportResult:
+async def with_auto_evaluation(result: ImportResult, llm: RegistryDep) -> ImportResult:
     # * Автооценка после импорта: очередь строится по текущим настройкам
     app = await asyncio.to_thread(load_app_settings)
     if app.auto_evaluate_on_import and result.imported:
@@ -40,12 +40,12 @@ async def check_source(group_id: str = Query(min_length=1, max_length=64)) -> So
 
 
 @router.post("/import")
-async def import_from_api(body: ImportRequest, llm: LLMDep) -> ImportResult:
+async def import_from_api(body: ImportRequest, llm: RegistryDep) -> ImportResult:
     return await with_auto_evaluation(await service.fetch_and_import(body.group_id, body.url), llm)
 
 
 @router.post("/upload")
-async def import_from_file(llm: LLMDep, file: UploadFile = File(...), dataset: str | None = Query(None)) -> ImportResult:
+async def import_from_file(llm: RegistryDep, file: UploadFile = File(...), dataset: str | None = Query(None)) -> ImportResult:
     try:
         payload = json.loads(await file.read())
     except (UnicodeDecodeError, json.JSONDecodeError) as e:

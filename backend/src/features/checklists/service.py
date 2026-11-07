@@ -10,7 +10,8 @@ from src.features.checklists.schemas import ChecklistData
 logger = logging.getLogger(__name__)
 
 # ** Поля, влияющие на ответ модели. Вес, секция и название сюда НЕ входят — их смена не требует LLM
-FINGERPRINT_FIELDS = ("type", "rule", "na_allowed", "na_condition", "scale", "guidance", "examples_pass", "examples_fail", "flag_types")
+# ** Всё, что попадает в промпт: изменение любого поля требует переспросить модель
+FINGERPRINT_FIELDS = ("type", "title", "rule", "na_allowed", "na_condition", "scale", "guidance", "examples_pass", "examples_fail", "flag_types")
 
 
 def fingerprint(criterion: dict[str, Any]) -> str:
@@ -28,11 +29,19 @@ def diff_checklists(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str
             result["new"].append(cid)
         elif fingerprint(prev) != fingerprint(c):
             result["changed"].append(cid)
-        elif any(prev.get(k) != c.get(k) for k in ("weight", "section", "title")):
+        elif any(prev.get(k) != c.get(k) for k in ("weight", "section")):
             result["weight_only"].append(cid)
         else:
             result["same"].append(cid)
     result["removed"] = [cid for cid in old_by_id if cid not in new_by_id]
+
+    # ** Порог первой реакции попадает в «факты о времени»: критерии с uses_timing нужно переоценить
+    threshold = lambda d: (d or {}).get("settings", {}).get("first_response_threshold_sec", 180)  # noqa: E731
+    result["threshold_changed"] = old is not None and threshold(old) != threshold(new)
+    if result["threshold_changed"]:
+        for cid in [cid for cid in result["same"] + result["weight_only"] if new_by_id[cid].get("uses_timing")]:
+            (result["same"] if cid in result["same"] else result["weight_only"]).remove(cid)
+            result["changed"].append(cid)
     result["needs_llm"] = result["changed"] + result["new"]
     return result
 

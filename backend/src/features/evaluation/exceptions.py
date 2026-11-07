@@ -30,6 +30,13 @@ class ChannelExcluded(HTTPException):
         )
 
 
+class NotEvaluable(HTTPException):
+    code = "not_evaluable"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Диалог нельзя оценить: {reason}")
+
+
 class LLMUnavailable(HTTPException):
     def __init__(self, detail: str, code: str) -> None:
         super().__init__(status.HTTP_502_BAD_GATEWAY, detail)

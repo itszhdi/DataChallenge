@@ -20,7 +20,8 @@ SYSTEM_PROMPT = """Ты — строгий аудитор службы конт�
 - Оценивается ТОЛЬКО оператор (speaker = оператор). Реплики бота и системные события — контекст.
 - Бот не может выполнить действие за оператора: приветствие, представление, прощание или извинение бота оператору НЕ засчитываются.
 - Системное сообщение — допустимое доказательство факта («Клиент идентифицирован», «Чат закрыт», «Клиент покинул чат», «Оператор подключился»).
-- Теги и вложения в оценку не входят. Не додумывай то, чего нет в транскрипте: если факта нет в тексте — его не было.
+- Теги и вложения в оценку не входят: маркер [вложение: …] лишь сообщает, что клиент или оператор что-то приложил, содержимое неизвестно. Пустая реплика — не ошибка оператора. «неизвестная роль» — реплика с нераспознанным автором, используй её только как контекст.
+- Не додумывай то, чего нет в транскрипте: если факта нет в тексте — его не было.
 - Для звонков (voice call) транскрипт получен распознаванием речи: опечатки, обрывы слов и отсутствие пунктуации — ошибки распознавания, а не оператора.
 
 ## 2. «Нет» vs N/A
@@ -259,27 +260,39 @@ EN: greeting «Hello / Good morning», name «My name is …», empathy «I'm so
 
 def render_timing(facts: dict[str, Any]) -> str:
     thr = facts["threshold_sec"]
-    lines = [f"Порог первой реакции: {thr} с ({thr // 60} мин)."]
-    if facts["first_response_sec"] is None:
-        lines.append("Первая реакция оператора на клиента: не определена (нет ответа оператора после реплики клиента или нет времени).")
+    lines = [f"Порог первой реакции: {thr} с ({thr // 60} мин). Отсчёт — с момента подключения оператора, время общения с ботом не учитывается."]
+    if facts["operator_joined_index"]:
+        lines.append(f"Диалог передан оператору: #{facts['operator_joined_index']}.")
+    if facts["first_operator_reply_index"] is None:
+        lines.append("Ответов оператора нет.")
+    elif facts["first_response_sec"] is None:
+        lines.append(f"Первая реакция оператора: #{facts['first_operator_reply_index']}, время ожидания не определено (оператор начал первым или нет времени).")
     else:
         verdict = "ПРЕВЫШЕН" if facts["first_response_exceeded"] else "не превышен"
+        since = "подключения оператора" if facts["anchor_kind"] == "join" else "реплики клиента"
         lines.append(
             f"Первая реакция оператора: #{facts['first_operator_reply_index']} через {facts['first_response_sec']:.0f} с "
-            f"после первой реплики клиента #{facts['first_client_index']} — порог {verdict}."
+            f"после {since} #{facts['anchor_index']} — порог {verdict}."
         )
     if facts["long_pauses"]:
         pauses = "; ".join(f"#{p['client_index']}→#{p['operator_index']}: {p['seconds']:.0f} с" for p in facts["long_pauses"])
         lines.append(f"Паузы клиент→оператор дольше порога: {pauses}. Проверь, предупреждал ли оператор об ожидании.")
     else:
         lines.append("Пауз клиент→оператор дольше порога нет.")
+    if facts.get("missing_time"):
+        lines.append(f"У {facts['missing_time']} реплик нет времени — по ним скорость не оценивай.")
     return "\n".join(lines)
+
+
+def _speaker(m: dict[str, Any]) -> str:
+    label = SPEAKER_RU.get(m.get("speaker"), str(m.get("speaker") or "?"))
+    return f"{label} ({m['speaker_raw']})" if m.get("speaker") == "unknown" and m.get("speaker_raw") else label
 
 
 def render_transcript(transcript: list[dict[str, Any]]) -> str:
     # * Формат строки: [#3] 01:10 оператор: текст — время как смещение от начала, номер реплики = ссылка для UI
     return "\n".join(
-        f"[#{m['index']}] {format_offset(m['offset_sec'])} {SPEAKER_RU.get(m['speaker'], m['speaker'])}: {m.get('text', '')}"
+        f"[#{m['index']}] {format_offset(m['offset_sec'])} {_speaker(m)}: {m.get('text') or '(пусто)'}"
         for m in with_offsets(transcript)
     )
 
