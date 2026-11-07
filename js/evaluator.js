@@ -3,7 +3,7 @@
 (function (root) {
   const R = {
     greet: /здравствуйте|добрый|привет|сәлем|сәлеметсіз|қайырлы|hello|\bhi\b|good (morning|afternoon|evening)/i,
-    intro: /меня зовут|менің атым|атым|my name|this is|i am|i'm/i,
+    intro: /[Мм]еня зовут|[Мм]енің атым|атым|есімім|[Mm]y name|[Tt]his is|I am|I'm|(?:^|[\s,.!])[Яя]\s+[А-ЯЁ][а-яё]+/,
     farewell: /до свидания|всего доброго|хорошего дня|сау болыңыз|қош болыңыз|goodbye|have a (great|nice)|take care|\bbye\b/i,
     negative: /недовол|ужас|безобраз|плохо|не работает|жалоб|жаман|істемей|ашу|angry|unacceptable|complain|worst/i,
     apology: /извин|сожале|простите|кешір|өкін|sorry|apolog/i,
