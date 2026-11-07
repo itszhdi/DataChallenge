@@ -174,14 +174,30 @@
     const secs = f.sections.filter((s) => s.max > 0).map((s) => `<div class="sec"><span>${esc(s.title)}</span><span>${fmt(s.points)} / ${fmt(s.max)}</span></div><div class="bar"><i style="width:${s.max ? (s.points / s.max) * 100 : 0}%"></i></div>`).join('');
     const g = f.gross_errors;
     const tokens = meta.tokens && meta.tokens.total_tokens ? ` · токены ${meta.tokens.prompt_tokens}/${meta.tokens.completion_tokens}` : '';
-    const metaLine = `${esc(meta.model || '')}${meta.seconds ? ` · ${meta.seconds} с` : ''}${tokens}${meta.reapplied_from ? ` · перенесено из оценки #${meta.reapplied_from}` : ''}`;
+    const criterionVersions = [...new Set(Object.values(meta.criteria_prompt_versions || {}).filter(Boolean))];
+    const promptLabel = meta.prompt_version ? `промпт ${esc(meta.prompt_version)}` : 'версия промпта не сохранена';
+    const mixedPromptLabel = criterionVersions.length > 1 ? ` · версии критериев ${criterionVersions.map(esc).join(', ')}` : '';
+    const metaLine = `${esc(meta.model || '')} · ${promptLabel}${mixedPromptLabel}${meta.seconds ? ` · ${meta.seconds} с` : ''}${tokens}${meta.reapplied_from ? ` · перенесено из оценки #${meta.reapplied_from}` : ''}`;
     const warns = f.warnings.length ? `<details class="small" style="margin-top:10px"><summary>Предупреждения (${f.warnings.length})</summary>${f.warnings.map((w) => `<div>• ${esc(w)}</div>`).join('')}</details>` : '';
     const crits = f.criteria.map((i) => critHtml(card, i)).join('');
     return `<div class="panel"><div class="row" style="align-items:flex-start;gap:22px"><div class="ring" style="--p:${f.total || 0};--c:${col}"><div><div><b>${fmt(f.total)}</b><small>из 100</small></div></div></div>
       <div style="flex:1;min-width:220px"><h2>Итог${f.preliminary ? ' <span class="tag amber">предварительный</span>' : ''}</h2>${secs || '<div class="small">Нет данных</div>'}
       <p class="small" style="margin:8px 0 0">${o.total !== f.total ? `Исходный итог: <b>${fmt(o.total)}</b> → после апелляций: <b>${fmt(f.total)}</b>. ` : ''}Чек-лист v${card.checklist.version}${card.checklist.is_active ? '' : ' (не активный)'} · ${metaLine}</p></div></div>
       <div class="flagbox ${g.detected ? 'bad' : 'ok'}">${g.detected ? `⚠ Грубая ошибка: ${esc(g.types.map((t) => GROSS[t] || t).join(', ') || 'тип не указан')}. Отмечено отдельно, на баллы не влияет` : '✓ Грубых ошибок не выявлено'}</div>${warns}</div>
+      ${operatorSummaryPanel(card.operator_summary)}
       <div class="panel" style="margin-top:18px"><h2>Критерии</h2>${crits}</div>`;
+  }
+  function operatorSummaryPanel(summary) {
+    if (!summary) return '';
+    const evidence = (ids) => (ids || []).map((n) => `<span class="chip" data-act="jump" data-i="${esc(n)}">#${esc(n)}</span>`).join(' ');
+    const strengths = (summary.strengths || []).map((x) => `<div class="crit"><span class="tag green">Хорошо</span> <b>${esc(x.title)}</b> ${evidence(x.evidence_ids)}</div>`).join('');
+    const improvements = (summary.improvements || []).map((x) => `<div class="${x.priority === 'critical' ? 'flagbox bad' : 'crit'}" style="margin-top:10px"><b>${x.priority === 'critical' ? 'Важно · ' : ''}${esc(x.title)}</b>${x.priority === 'critical' && x.feedback ? `<p>${esc(x.feedback)}</p>` : ''}<p class="small"><b>В следующий раз:</b> ${esc(x.action)}</p>${evidence(x.evidence_ids)}</div>`).join('');
+    const review = summary.review && summary.review.length ? `<p class="small">Не удалось оценить: ${summary.review.map((x) => esc(x.title)).join(', ')}. Эти пункты требуют проверки.</p>` : '';
+    const empty = !strengths && !improvements && !review;
+    return `<div class="panel" style="margin-top:18px"><div class="row"><h2 style="margin:0">Краткая сводка для оператора</h2><div class="spacer"></div><button class="btn sm" data-act="download-summary">Скачать .txt</button></div>
+      ${strengths ? `<h3>Хорошо получилось</h3>${strengths}` : ''}
+      ${improvements ? `<h3>Что улучшить</h3>${improvements}` : ''}
+      ${review}${empty ? '<p class="small">Нет достаточно данных для сводки.</p>' : ''}</div>`;
   }
   function critHtml(card, it) {
     const clId = card.checklist.id, c = critOf(clId, it.id) || {}, conv = R.conv;
@@ -359,6 +375,35 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  function downloadText(name, text) {
+    const blob = new Blob(['\ufeff', text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function operatorSummaryText() {
+    const summary = R.card && R.card.operator_summary;
+    if (!summary || !R.conv) return '';
+    const lines = [`Сводка для оператора · диалог ${R.conv.id}`, '', 'Хорошо получилось:'];
+    if (summary.strengths.length) summary.strengths.forEach((x) => lines.push(`• ${x.title}`));
+    else lines.push('• Отмеченных сильных сторон нет.');
+    lines.push('', 'Что улучшить:');
+    if (summary.improvements.length) {
+      summary.improvements.forEach((x) => {
+        lines.push(`• ${x.priority === 'critical' ? 'Важно: ' : ''}${x.title}`);
+        if (x.feedback) lines.push(`  Причина: ${x.feedback}`);
+        lines.push(`  В следующий раз: ${x.action}`);
+        (x.evidence_ids || []).forEach((n) => {
+          const m = R.conv.transcript[n - 1];
+          lines.push(`  Реплика из диалога: ${m ? `#${n} ${SPEAKER[m.speaker] || m.speaker}: ${m.text}` : `#${n}`}`);
+        });
+      });
+    } else lines.push('• Зон для улучшения не выявлено.');
+    if (summary.review.length) {
+      lines.push('', 'Требует проверки:');
+      summary.review.forEach((x) => lines.push(`• ${x.title} — модель не смогла оценить критерий.`));
+    }
+    return lines.join('\r\n');
+  }
   async function afterImport(res) {
     S.dataset = res.dataset; await loadBase(); render();
     toast(`Импортировано: ${res.imported}${res.skipped ? `, пропущено: ${res.skipped}` : ''} (набор ${res.dataset})`);
@@ -404,6 +449,12 @@
         if (!data.results.length) return toast('Нет данных: сначала оцените диалоги');
         download(`cqa-results-${S.dataset || 'all'}-${new Date().toISOString().slice(0, 10)}.json`, data);
         return toast(`Скачан JSON: ${data.results.length} оценок`);
+      }
+      if (a === 'download-summary') {
+        const text = operatorSummaryText(); if (!text) return toast('Нет сводки для скачивания');
+        const safeId = R.conv.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+        downloadText(`cqa-summary-${safeId}.txt`, text);
+        return toast('Сводка скачана');
       }
       if (a === 'jump') return jump(+t.dataset.i);
       if (a === 'seek') { const p = $('#player'); if (p && R.conv) { S.ui.lastSeek = +t.dataset.i; p.currentTime = Math.max(0, offsetOf(+t.dataset.i) + shiftOf(R.conv.id)); p.play().catch(() => {}); } return jump(+t.dataset.i); }

@@ -14,6 +14,9 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
+[project.scripts]
+cqa = "src.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",

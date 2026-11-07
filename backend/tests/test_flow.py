@@ -6,6 +6,7 @@ import pytest
 
 from src.config.settings import get_settings
 from src.llm.client import LLMClient
+from src.llm.prompts import PROMPT_VERSION
 from src.main import app
 
 SAMPLE = Path(__file__).parent / "sample_data.json"
@@ -49,6 +50,8 @@ async def test_full_flow(client):
     card = (await client.post("/api/evaluate", json={"conversation_id": "s-ru-001"})).json()
     eid = card["evaluation"]["id"]
     assert card["final"]["total"] == 100.0 and len(client.llm_calls) == 1
+    assert card["meta"]["prompt_version"] == PROMPT_VERSION
+    assert set(card["meta"]["criteria_prompt_versions"].values()) == {PROMPT_VERSION}
 
     # * Смена веса: новая версия + пересчёт без модели
     r = (await client.patch("/api/checklists/active/weights", json={"weights": {"c01_contact": 30}})).json()
@@ -67,6 +70,8 @@ async def test_full_flow(client):
     card = (await client.post(f"/api/evaluations/{latest}/reapply")).json()
     assert sorted(client.llm_calls[-1]) == ["c02_needs", "c09_offer"]
     assert card["evaluation"]["parent_id"] == latest
+    assert card["meta"]["prompt_version"] == PROMPT_VERSION
+    assert set(card["meta"]["criteria_prompt_versions"].values()) == {PROMPT_VERSION}
 
     # * Апелляция: c04 20 -> 10 (вес 20 из применимых)
     new_eid = card["evaluation"]["id"]
@@ -80,4 +85,8 @@ async def test_full_flow(client):
 
     analytics = (await client.get("/api/analytics")).json()
     assert analytics["evaluated"] == 1 and analytics["worst"][0]["total"] == r["final_total"]
+    exported = (await client.get("/api/export", params={"dataset": "SAMPLE", "team_name": "test"})).json()
+    assert exported["schema_version"] == "1.1"
+    assert exported["results"][0]["prompt_version"] == PROMPT_VERSION
+    assert set(exported["results"][0]["criteria_prompt_versions"].values()) == {PROMPT_VERSION}
     assert eid != new_eid

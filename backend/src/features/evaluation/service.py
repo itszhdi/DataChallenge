@@ -17,10 +17,11 @@ from src.features.evaluation.exceptions import (
     LLMUnavailable,
     NoActiveChecklist,
 )
+from src.features.evaluation.operator_summary import build_operator_summary
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
 from src.llm.client import LLMClient, LLMError
-from src.llm.prompts import build_messages, build_schema, ground_answers, select_criteria
+from src.llm.prompts import PROMPT_VERSION, build_messages, build_schema, ground_answers, select_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,12 @@ async def run_llm(
     answers, warnings = validate_answers(criteria, raw, len(conversation["transcript"]))
     if warnings:
         logger.warning("Validation warnings for %s: %s", conversation["id"], warnings)
-    meta.update(warnings=warnings, evaluated_criteria=[c["id"] for c in criteria])
+    meta.update(
+        prompt_version=PROMPT_VERSION,
+        criteria_prompt_versions={c["id"]: PROMPT_VERSION for c in criteria},
+        warnings=warnings,
+        evaluated_criteria=[c["id"] for c in criteria],
+    )
     return answers, meta
 
 
@@ -152,6 +158,7 @@ def build_card(evaluation_id: int) -> dict[str, Any]:
         "meta": meta,
         "original": original,
         "final": final,
+        "operator_summary": build_operator_summary(checklist["data"], final),
         "appeals": appeals,
         "conversation": conversation,
     }
@@ -206,7 +213,21 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
     needs = [c["id"] for c in active["data"]["criteria"] if c["id"] not in copied]
     answers = {cid: old["answers"][cid] for cid in copied}
     old_warnings = [w for w in old["meta"].get("warnings", []) if w.split(":")[0] in copied]
-    meta: dict[str, Any] = {"reapplied_from": evaluation_id, "copied": copied, "evaluated_criteria": needs, "diff": diff, "llm": None}
+    old_meta = old.get("meta") or {}
+    inherited_versions = old_meta.get("criteria_prompt_versions") or {}
+    criteria_versions = {
+        cid: inherited_versions.get(cid, old_meta.get("prompt_version") or "unknown")
+        for cid in copied
+    }
+    meta: dict[str, Any] = {
+        "reapplied_from": evaluation_id,
+        "copied": copied,
+        "evaluated_criteria": needs,
+        "diff": diff,
+        "llm": None,
+        "prompt_version": old_meta.get("prompt_version"),
+        "criteria_prompt_versions": criteria_versions,
+    }
 
     if needs:
         conversation = await asyncio.to_thread(db.get_conversation, old["conversation_id"])
@@ -216,8 +237,10 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
         new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)
         answers.update(new_answers)
         meta["llm"] = {k: v for k, v in llm_meta.items() if k not in ("warnings", "evaluated_criteria")}
-        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd") if k in llm_meta})
+        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd", "prompt_version") if k in llm_meta})
+        criteria_versions.update(llm_meta.get("criteria_prompt_versions") or {})
         old_warnings += llm_meta["warnings"]
+    meta["criteria_prompt_versions"] = criteria_versions
     meta["warnings"] = old_warnings
 
     new_id = await asyncio.to_thread(db.insert_evaluation, old["conversation_id"], active["id"], answers, meta, evaluation_id)

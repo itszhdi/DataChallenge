@@ -1,4 +1,4 @@
-.PHONY: install run test import-dev upload eval batch job analytics clean-db docker-build docker-up docker-down docker-logs
+.PHONY: install run test import-dev upload eval batch job analytics golden clean-db docker-build docker-up docker-down docker-logs
 
 PORT ?= 8000
 
@@ -28,6 +28,9 @@ job:
 
 analytics:
 	@curl -s "localhost:$(PORT)/api/analytics?dataset=$(DATASET)"
+
+golden:
+	@uv run cqa golden $(or $(FILE),tests/golden.csv)
 
 docker-build:
 	docker compose build
