@@ -12,22 +12,22 @@ test:
 	uv run pytest -q
 
 import-dev:
-	curl -s -X POST localhost:$(PORT)/api/datasets/import -H 'Content-Type: application/json' -d '{"group_id":"DEV"}'
+	@curl -s -X POST localhost:$(PORT)/api/datasets/import -H 'Content-Type: application/json' -d '{"group_id":"DEV"}'
 
 upload:
-	curl -s -X POST "localhost:$(PORT)/api/datasets/upload?dataset=$(DATASET)" -F "file=@$(FILE)"
+	@curl -s -X POST "localhost:$(PORT)/api/datasets/upload?dataset=$(DATASET)" -F "file=@$(FILE)"
 
 eval:
-	curl -s -X POST localhost:$(PORT)/api/evaluate -H 'Content-Type: application/json' -d '{"conversation_id":"$(ID)"}'
+	@curl -s -X POST localhost:$(PORT)/api/evaluate -H 'Content-Type: application/json' -d '{"conversation_id":"$(ID)"}'
 
 batch:
-	curl -s -X POST localhost:$(PORT)/api/evaluate/batch -H 'Content-Type: application/json' -d '{"dataset":"$(or $(DATASET),DEV)","mode":"$(or $(MODE),evaluate)","only_missing":$(or $(ONLY_MISSING),false)}'
+	@curl -s -X POST localhost:$(PORT)/api/evaluate/batch -H 'Content-Type: application/json' -d '{"dataset":"$(or $(DATASET),DEV)","mode":"$(or $(MODE),evaluate)","only_missing":$(or $(ONLY_MISSING),false)}'
 
 job:
-	curl -s localhost:$(PORT)/api/jobs/$(JOB)
+	@curl -s localhost:$(PORT)/api/jobs/$(JOB)
 
 analytics:
-	curl -s "localhost:$(PORT)/api/analytics?dataset=$(DATASET)"
+	@curl -s "localhost:$(PORT)/api/analytics?dataset=$(DATASET)"
 
 docker-build:
 	docker compose build
