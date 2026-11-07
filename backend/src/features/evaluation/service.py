@@ -99,6 +99,15 @@ def validate_answers(
 async def run_llm(
     llm: LLMClient, checklist: dict[str, Any], conversation: dict[str, Any], criteria: list[dict[str, Any]]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    # c01 N/A is a recording limitation specific to calls; keep stored checklist unchanged.
+    criteria = [
+        {**c, **({
+            "na_allowed": (conversation.get("channel") or "").strip().lower() == "voice call",
+            "na_condition": "Запись звонка явно начинается после начала разговора, поэтому приветствие могло не попасть в запись."
+                if (conversation.get("channel") or "").strip().lower() == "voice call" else "",
+        } if c["id"] == "c01_contact" else {})}
+        for c in criteria
+    ]
     messages = build_messages(checklist, conversation, criteria)
     try:
         raw, meta = await llm.complete_json(messages, build_schema(criteria))
@@ -146,8 +155,8 @@ def build_card(evaluation_id: int) -> dict[str, Any]:
     appeals = db.list_appeals(evaluation_id=evaluation_id)
     meta = evaluation["meta"]
 
-    original = score_evaluation(checklist["data"], evaluation["answers"])
-    final = score_evaluation(checklist["data"], apply_appeals(evaluation["answers"], appeals))
+    original = score_evaluation(checklist["data"], evaluation["answers"], conversation.get("channel"))
+    final = score_evaluation(checklist["data"], apply_appeals(evaluation["answers"], appeals), conversation.get("channel"))
     for score in (original, final):
         score["warnings"] = meta.get("warnings", []) + score["warnings"]
 
@@ -174,7 +183,7 @@ def summarize_latest(dataset: str | None = None) -> dict[str, dict[str, Any]]:
     out = {}
     for e in evaluations:
         cl = checklists.setdefault(e["checklist_id"], db.get_checklist(e["checklist_id"])["data"])
-        score = score_evaluation(cl, apply_appeals(e["answers"], appeals_by_eval[e["id"]]))
+        score = score_evaluation(cl, apply_appeals(e["answers"], appeals_by_eval[e["id"]]), e.get("channel"))
         out[e["conversation_id"]] = {"evaluation": e, "checklist": cl, "score": score}
     return out
 
