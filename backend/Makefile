@@ -65,9 +65,9 @@ use-gemini:
 use-local:
 	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"local"}'
 
-# * SORT: date_asc | date_desc | size_asc | size_desc; CALLS: mixed | first | last
+# * SORT: short_first | long_first | newest_first | oldest_first (общий порядок пакета и воркера); CALLS: mixed | first | last
 auto-on:
-	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":true,"auto_sort":"$(or $(SORT),date_asc)","auto_calls":"$(or $(CALLS),mixed)"}'
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":true,"queue_sort":"$(or $(SORT),short_first)","auto_calls":"$(or $(CALLS),mixed)"}'
 
 auto-off:
 	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":false}'

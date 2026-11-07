@@ -9,6 +9,7 @@ import Button from '../ui/Button'
 import { Card, CardHeader } from '../ui/Card'
 import { Field, Input } from '../ui/Field'
 import { ErrorState, LoadingState } from '../ui/States'
+import ModelSettings from './ModelSettings'
 
 function CheckResult({ check }) {
   const { t } = useTranslation()
@@ -38,29 +39,32 @@ export default function IntegrationSettings() {
 
   const groupId = form.default_group_id.trim()
   return (
-    <Card className="max-w-2xl pb-5">
-      <CardHeader title={t('settings.integration.title')} hint={t('settings.integration.hint')} />
-      <div className="space-y-4 px-5">
-        <Field label={t('settings.integration.groupId')} hint={t('settings.integration.groupIdHint')}>
-          <Input
-            value={form.default_group_id}
-            maxLength={64}
-            onChange={(event) => {
-              check.reset()
-              change('default_group_id', event.target.value)
-            }}
-          />
-        </Field>
-        <div className="grid gap-2 sm:flex">
-          <Button icon={LuPlugZap} loading={check.isPending} disabled={!groupId} onClick={() => check.mutate(groupId)}>
-            {t('settings.integration.check')}
-          </Button>
-          <Button variant="primary" icon={LuSave} loading={isSaving} disabled={!isDirty || !groupId} onClick={save}>
-            {t('settings.save')}
-          </Button>
+    <div className="space-y-5">
+      <Card className="max-w-2xl pb-5">
+        <CardHeader title={t('settings.integration.title')} hint={t('settings.integration.hint')} />
+        <div className="space-y-4 px-5">
+          <Field label={t('settings.integration.groupId')} hint={t('settings.integration.groupIdHint')}>
+            <Input
+              value={form.default_group_id}
+              maxLength={64}
+              onChange={(event) => {
+                check.reset()
+                change('default_group_id', event.target.value)
+              }}
+            />
+          </Field>
+          <div className="grid gap-2 sm:flex">
+            <Button icon={LuPlugZap} loading={check.isPending} disabled={!groupId} onClick={() => check.mutate(groupId)}>
+              {t('settings.integration.check')}
+            </Button>
+            <Button variant="primary" icon={LuSave} loading={isSaving} disabled={!isDirty || !groupId} onClick={save}>
+              {t('settings.save')}
+            </Button>
+          </div>
+          <CheckResult check={check} />
         </div>
-        <CheckResult check={check} />
-      </div>
-    </Card>
+      </Card>
+      <ModelSettings />
+    </div>
   )
 }

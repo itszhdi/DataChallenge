@@ -95,14 +95,24 @@ function FinishedResult({ job, onClose, onRetry }) {
 
 function StartFailure({ error, onClose }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const code = startErrorCode(error)
+  const openChecklist = () => {
+    onClose()
+    navigate('/settings?tab=checklist')
+  }
   return (
     <Modal open onClose={onClose} title={t('job.result.failed.title')} description={t('job.result.notStarted')}>
       <div className="space-y-4">
         <LuCircleX className="mx-auto size-12 text-danger-text" aria-hidden />
         <Reasons groups={[{ code, count: 1 }]} />
         <TechnicalDetails lines={error.detail ? [error.detail] : []} />
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {code === 'no_checklist' && (
+            <Button variant="primary" onClick={openChecklist}>
+              {t('nav.settings')}
+            </Button>
+          )}
           <Button onClick={onClose}>{t('common.close')}</Button>
         </div>
       </div>

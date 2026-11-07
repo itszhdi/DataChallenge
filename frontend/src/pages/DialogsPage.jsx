@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import DialogsTable from '../components/dialogs/DialogsTable'
 import DialogsToolbar from '../components/dialogs/DialogsToolbar'
+import QueueStatus from '../components/dialogs/QueueStatus'
 import DatasetSelect from '../components/layout/DatasetSelect'
 import PageHeader from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -10,7 +11,8 @@ import { EmptyState, ErrorState, LoadingState } from '../components/ui/States'
 import { useConversations } from '../hooks/useConversations'
 import { useDataset } from '../hooks/useDataset'
 import { useJob } from '../hooks/useJob'
-import { CHANNEL_LABEL_KEYS, CHANNELS } from '../lib/constants'
+import { isQueueActive, useQueue } from '../hooks/useQueue'
+import { CHANNEL_LABEL_KEYS, CHANNELS, QUEUE_ACTIVE_POLL_MS } from '../lib/constants'
 import { liveStatuses } from '../lib/jobResult'
 
 const ALL = 'all'
@@ -18,7 +20,9 @@ const ALL = 'all'
 export default function DialogsPage() {
   const { t } = useTranslation()
   const { dataset } = useDataset()
-  const conversations = useConversations(dataset)
+  const queue = useQueue(dataset)
+  // Пока идёт анализ или работает авторежим, статусы и ETA в строках обновляются вместе с очередью
+  const conversations = useConversations(dataset, isQueueActive(queue.data) ? QUEUE_ACTIVE_POLL_MS : false)
   const { job, isRunning, start, track } = useJob()
   const [channel, setChannel] = useState(ALL)
   const [appeals, setAppeals] = useState(ALL)
@@ -33,6 +37,7 @@ export default function DialogsPage() {
   const failures = useMemo(() => new Map((job?.failed ?? []).map((item) => [item.conversation_id, item.code])), [job])
   const statuses = useMemo(() => liveStatuses(job), [job])
   const onEvaluate = useCallback((id) => start({ mode: 'evaluate', conversationIds: [id] }), [start])
+  const upcoming = useMemo(() => new Map((queue.data?.upcoming ?? []).map((item) => [item.conversation_id, item.position])), [queue.data])
 
   const renderContent = () => {
     if (conversations.isLoading) return <LoadingState />
@@ -44,6 +49,7 @@ export default function DialogsPage() {
         rows={rows}
         statuses={statuses}
         failures={failures}
+        upcoming={upcoming}
         isBusy={isRunning}
         onEvaluate={onEvaluate}
       />
@@ -73,6 +79,7 @@ export default function DialogsPage() {
           </Select>
           <span className="ml-auto text-sm text-ink-muted">{t('dialogs.count', { count: rows.length })}</span>
         </div>
+        <QueueStatus queue={queue.data} isBusy={isRunning} onRetryFailed={() => start({ dataset, onlyFailed: true })} />
         {renderContent()}
       </Card>
     </>

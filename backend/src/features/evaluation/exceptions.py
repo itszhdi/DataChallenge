@@ -1,5 +1,8 @@
 from fastapi import HTTPException, status
 
+# * Оба конфликта приходят с 409: фронт различает их по машинному коду в заголовке
+ERROR_CODE_HEADER = "X-Error-Code"
+
 
 class ConversationNotFound(HTTPException):
     code = "conversation_not_found"
@@ -17,7 +20,7 @@ class NoActiveChecklist(HTTPException):
     code = "no_checklist"
 
     def __init__(self) -> None:
-        super().__init__(status.HTTP_409_CONFLICT, "Нет активного чек-листа")
+        super().__init__(status.HTTP_409_CONFLICT, "Нет активного чек-листа", headers={ERROR_CODE_HEADER: self.code})
 
 
 class ChannelExcluded(HTTPException):
@@ -44,8 +47,12 @@ class LLMUnavailable(HTTPException):
 
 
 class JobAlreadyRunning(HTTPException):
+    code = "job_running"
+
     def __init__(self) -> None:
-        super().__init__(status.HTTP_409_CONFLICT, "Оценка уже идёт, дождитесь её окончания")
+        super().__init__(
+            status.HTTP_409_CONFLICT, "Оценка уже идёт, дождитесь её окончания", headers={ERROR_CODE_HEADER: self.code}
+        )
 
 
 class JobNotFound(HTTPException):

@@ -51,7 +51,7 @@ export default function JobProvider({ children }) {
     onSuccess: (created) => track(created.id),
     onError: async (error) => {
       // 409: оценка уже идёт (например, автооценка после импорта) — показываем её прогресс вместо ошибки
-      if (error.status === 409) {
+      if (error.status === 409 && error.code !== 'no_checklist') {
         const [active] = await fetchActiveJobs().catch(() => [])
         if (active) {
           track(active.id)

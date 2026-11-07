@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src import db
 from src.config.settings import Settings, get_settings
+from src.features.evaluation.exceptions import ERROR_CODE_HEADER
 from src.features.settings.service import apply_app_settings, load_app_settings
 from src.features.transcription.service import configure as configure_transcriber
 from src.features.worker.service import run as run_worker
@@ -56,7 +57,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="CQA", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(
-        CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"]
+        CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"],
+        expose_headers=[ERROR_CODE_HEADER],
     )
     app.include_router(api_router)
     return app

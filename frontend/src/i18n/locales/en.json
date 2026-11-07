@@ -51,7 +51,8 @@
     "preliminary": "Preliminary",
     "evaluated": "Evaluated",
     "queued": "In queue",
-    "skipped": "Skipped"
+    "skipped": "Skipped",
+    "upcoming": "Auto queue #{{position}}"
   },
   "gross": {
     "insult": "Insulting the client",
@@ -91,7 +92,8 @@
     "allAppeals": "All dialogs",
     "openAppeals": "With an open appeal",
     "count_one": "{{count}} dialog",
-    "count_other": "{{count}} dialogs"
+    "count_other": "{{count}} dialogs",
+    "retry": "Retry"
   },
   "import": {
     "title": "Import dialogs",
@@ -232,7 +234,9 @@
     "drilldownTitle": "Problem dialogs",
     "drilldownHint_one": "{{count}} dialog, worst first",
     "drilldownHint_other": "{{count}} dialogs, worst first",
-    "resetFilter": "Reset filter"
+    "resetFilter": "Reset filter",
+    "riskTitle": "Risk monitor",
+    "riskHint": "Critical violations (c08) by type. Click to see the dialogs"
   },
   "errors": {
     "0": "Backend unavailable. Check that the server is running",
@@ -343,7 +347,8 @@
       "delay": "Delay between requests, ms",
       "delayHint": "Minimum pause between model requests",
       "autoEvaluate": "Evaluate automatically right after importing a new dataset",
-      "autoEvaluateHint": "The batch uses the filter and order from this section"
+      "autoEvaluateHint": "The batch uses the filter and order from this section",
+      "sortHint": "Shared order for batch evaluation and auto-check"
     },
     "integration": {
       "title": "Data source (organizers' API)",
@@ -353,6 +358,32 @@
       "check": "Test API connection",
       "ok": "Connection works: dataset {{dataset}}, records: {{count}}",
       "empty": "Connection works, but dataset {{dataset}} has no records"
+    },
+    "auto": {
+      "title": "Auto-check",
+      "hint": "The server evaluates new dialogs one by one. Failed ones are not retried — use Retry.",
+      "mode": "Automatic mode",
+      "modeHint": "Off — dialogs are evaluated only manually",
+      "dataset": "Dataset",
+      "calls": "Calls",
+      "calls_mixed": "Mixed with chats",
+      "calls_first": "Calls first",
+      "calls_last": "Calls last"
+    },
+    "model": {
+      "title": "Model",
+      "hint": "Switching applies immediately, no server restart",
+      "profile": "Active model",
+      "profile_gemini": "Gemini (cloud)",
+      "profile_local": "Local (LM Studio)",
+      "callTranscript": "Call transcript",
+      "callTranscriptHint": "Which text calls are evaluated on",
+      "transcript_asr": "Recognized from audio",
+      "transcript_original": "From the dataset",
+      "check": "Check models",
+      "available": "available",
+      "notLoaded": "model is not loaded or the name is wrong",
+      "unavailable": "unavailable. {{error}}"
     }
   },
   "jobError": {
@@ -440,5 +471,34 @@
     "reason": "Reason",
     "nextTime": "Next time",
     "quote": "Quote from the dialog"
+  },
+  "export": {
+    "open": "Export",
+    "title": "Export results",
+    "description": "Dataset: {{dataset}}",
+    "allDatasets": "all datasets",
+    "team": "Team name",
+    "teamRequired": "Enter the team name",
+    "mode": "Model mode",
+    "modeAuto": "From the active model",
+    "mode_local": "Local",
+    "mode_remote": "Cloud (remote)",
+    "model": "Model",
+    "modelHint": "Empty — the active model",
+    "hint": "The report includes every dialog in the dataset; unevaluated ones carry their status and reason.",
+    "download": "Download report",
+    "save": "Save on server (results/)",
+    "saved": "Saved: {{file}}"
+  },
+  "queue": {
+    "summary": "Analysis: {{running}} running, {{waiting}} waiting",
+    "retryFailed": "Retry failed ({{count}})",
+    "worker": {
+      "manual": "Auto-check is off — manual mode",
+      "running": "Auto-check: analyzing {{id}}",
+      "paused": "Auto-check paused — a batch is running",
+      "idle": "Auto-check: no new dialogs",
+      "error": "Auto-check error — {{error}}"
+    }
   }
 }

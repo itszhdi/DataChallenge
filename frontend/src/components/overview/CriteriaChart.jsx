@@ -38,6 +38,8 @@ export default function CriteriaChart({ criteria, filter, onFilter }) {
             dataKey="avg_percent"
             radius={6}
             barSize={22}
+            // Худший критерий с 0% иначе не виден и по нему нельзя кликнуть
+            minPointSize={4}
             cursor="pointer"
             isAnimationActive={false}
             background={{ fill: 'var(--surface-muted)', radius: 6 }}

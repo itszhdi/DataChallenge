@@ -253,7 +253,8 @@ async def test_only_one_job_at_a_time(client, monkeypatch):
     payload = {"conversation_ids": ["s-ru-001"]}
     started = (await client.post("/api/evaluate/batch", json=payload)).json()
     assert started["conversation_ids"] == ["SAMPLE:s-ru-001"]
-    assert (await client.post("/api/evaluate/batch", json=payload)).status_code == 409
+    busy = await client.post("/api/evaluate/batch", json=payload)
+    assert busy.status_code == 409 and busy.headers["x-error-code"] == "job_running"
     await asyncio.sleep(0.01)
     assert (await client.get(f"/api/jobs/{started['id']}")).json()["current"] == ["SAMPLE:s-ru-001"]
     release.set()

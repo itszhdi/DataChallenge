@@ -5,22 +5,26 @@ import { LuPlay } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useFormat } from '../../hooks/useFormat'
 import { PAGE_SIZE } from '../../lib/constants'
-import { scoreTone } from '../../lib/format'
+import { formatClock, scoreTone } from '../../lib/format'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import DataTable from '../ui/DataTable'
 import ChannelBadge from './ChannelBadge'
 
-function DialogStatus({ row, statuses, failures }) {
+function DialogStatus({ row, statuses, failures, upcoming }) {
   const { t } = useTranslation()
   const status = statuses.get(row.id)
   const failure = failures.get(row.id)
-  if (status === 'analyzing' || (!status && row.status === 'running')) return <Badge tone="info">{t('status.analyzing')}</Badge>
-  if (status === 'queued' || (!status && row.status === 'queued')) return <Badge tone="info">{t('status.queued')}</Badge>
+  const eta = row.eta_sec ? ` · ~${formatClock(row.eta_sec)}` : ''
+  if (status === 'analyzing' || (!status && row.status === 'running')) return <Badge tone="info">{t('status.analyzing')}{eta}</Badge>
+  if (status === 'queued' || (!status && row.status === 'queued')) return <Badge tone="info">{t('status.queued')}{eta}</Badge>
   if (failure) return <Badge tone="danger" title={t(`jobError.${failure}.title`, { defaultValue: '' })}>{t('status.failed')}</Badge>
   // Статус из БД переживает перезагрузку страницы и показывает работу авто-воркера
   if (row.status === 'failed') return <Badge tone="danger" title={row.status_error ?? undefined}>{t('status.failed')}</Badge>
   if (row.status === 'skipped' && !row.last_evaluation_id) return <Badge title={row.status_error ?? undefined}>{t('status.skipped')}</Badge>
+  if (!row.last_evaluation_id && upcoming.has(row.id)) {
+    return <Badge tone="info">{t('status.upcoming', { position: upcoming.get(row.id) })}{eta}</Badge>
+  }
   if (row.excluded) return <Badge title={t('status.excludedHint')}>{t('status.excluded')}</Badge>
   if (!row.last_evaluation_id) return <Badge>{t('status.notEvaluated')}</Badge>
   if (row.gross_error) return <Badge tone="danger">{t('status.gross')}</Badge>
@@ -30,7 +34,7 @@ function DialogStatus({ row, statuses, failures }) {
 
 const INITIAL_SORTING = [{ id: 'imported_at', desc: true }]
 
-export default function DialogsTable({ rows, statuses, failures, isBusy, onEvaluate }) {
+export default function DialogsTable({ rows, statuses, failures, upcoming, isBusy, onEvaluate }) {
   const { t } = useTranslation()
   const format = useFormat()
   const navigate = useNavigate()
@@ -65,7 +69,7 @@ export default function DialogsTable({ rows, statuses, failures, isBusy, onEvalu
         id: 'status',
         enableSorting: false,
         header: t('table.status'),
-        cell: ({ row }) => <DialogStatus row={row.original} statuses={statuses} failures={failures} />,
+        cell: ({ row }) => <DialogStatus row={row.original} statuses={statuses} failures={failures} upcoming={upcoming} />,
       },
       {
         accessorKey: 'open_appeals',
@@ -87,12 +91,12 @@ export default function DialogsTable({ rows, statuses, failures, isBusy, onEvalu
               onEvaluate(original.id)
             }}
           >
-            {t(original.last_evaluation_id ? 'dialogs.reevaluate' : 'dialogs.evaluate')}
+            {t(original.status === 'failed' ? 'dialogs.retry' : original.last_evaluation_id ? 'dialogs.reevaluate' : 'dialogs.evaluate')}
           </Button>
         ),
       },
     ],
-    [t, format, statuses, failures, isBusy, onEvaluate],
+    [t, format, statuses, failures, upcoming, isBusy, onEvaluate],
   )
 
   const table = useReactTable({

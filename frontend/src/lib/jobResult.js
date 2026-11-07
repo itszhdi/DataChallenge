@@ -15,7 +15,7 @@ export function summarizeJob(job) {
   return { outcome, done, failed, failedGroups: groupByCode(job.failed), skippedGroups: groupByCode(job.skipped) }
 }
 
-export const startErrorCode = (error) => STATUS_BY_API_ERROR[error.status] ?? 'internal'
+export const startErrorCode = (error) => error.code ?? STATUS_BY_API_ERROR[error.status] ?? 'internal'
 
 // Статус диалога в идущей задаче: id → analyzing | queued
 export function liveStatuses(job) {

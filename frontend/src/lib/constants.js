@@ -12,6 +12,8 @@ export const SCORE_WARN_FROM = 60
 
 export const PAGE_SIZE = 10
 export const JOB_POLL_MS = 2500
+export const QUEUE_ACTIVE_POLL_MS = 2500
+export const QUEUE_IDLE_POLL_MS = 20000
 
 // Метка реплики в звонке — момент распознавания: сама фраза звучит примерно на 3 секунды раньше
 export const AUDIO_LEAD_SEC = -3
@@ -23,4 +25,7 @@ export const STORAGE_KEYS = {
   jobId: 'cqa-job-id',
   jobAcknowledged: 'cqa-job-acknowledged',
   sidebar: 'cqa-sidebar-open',
+  exportTeam: 'cqa-export-team',
+  exportMode: 'cqa-export-mode',
+  exportModel: 'cqa-export-model',
 }

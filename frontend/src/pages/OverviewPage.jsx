@@ -7,6 +7,7 @@ import CriteriaChart from '../components/overview/CriteriaChart'
 import DistributionChart from '../components/overview/DistributionChart'
 import DrilldownTable from '../components/overview/DrilldownTable'
 import KpiCards from '../components/overview/KpiCards'
+import RiskMonitor from '../components/overview/RiskMonitor'
 import SegmentsChart from '../components/overview/SegmentsChart'
 import { Card } from '../components/ui/Card'
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/States'
@@ -48,6 +49,7 @@ export default function OverviewPage() {
           <div className="space-y-5">
             <SegmentsChart byLanguage={data.by_language} byChannel={data.by_channel} filter={filter} onFilter={toggleFilter} />
             <DistributionChart distribution={data.distribution} filter={filter} onFilter={toggleFilter} />
+            <RiskMonitor dialogs={data.dialogs} filter={filter} onFilter={toggleFilter} />
           </div>
         </div>
         <DrilldownTable ref={tableRef} data={data} filter={filter} onReset={() => setFilter(null)} />

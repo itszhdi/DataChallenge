@@ -46,10 +46,10 @@
 ## 3. Настройки, выбор модели, статусы анализа, ETA, Retry
 
 **Новые эндпоинты**
-- `GET /api/settings` → `{auto_mode, auto_sort, auto_calls, auto_dataset, llm_profile, call_transcript, profiles: {gemini: {provider, model, base_url: null, active}, local: {provider, model, base_url, active}}}` (`auto_calls` — раздел 4, `call_transcript` — раздел 6).
-- `PATCH /api/settings`: любое подмножество полей:
+- `GET /api/settings` → `{queue_sort, only_missing, include_errors, concurrency, request_delay_ms, auto_evaluate_on_import, default_group_id, auto_mode, auto_calls, auto_dataset, llm_profile, call_transcript, profiles: {gemini: {provider, model, base_url: null, active}, local: {provider, model, base_url, active}}}` (`auto_calls` — раздел 4, `call_transcript` — раздел 6).
+- `PUT` и `PATCH /api/settings` — оба частичное обновление: любое подмножество полей:
   - `auto_mode: bool` — ручной или автоматический режим;
-  - `auto_sort: "date_asc" | "date_desc" | "size_asc" | "size_desc"` — дата импорта или число реплик;
+  - `queue_sort: "short_first" | "long_first" | "newest_first" | "oldest_first"` — число реплик или дата импорта; общий порядок для пакетной оценки и авто-воркера (после слияния заменил `auto_sort`);
   - `auto_dataset: string | null` — null означает все наборы;
   - `llm_profile: "gemini" | "local"` — применяется сразу, без рестарта.
   Неверное значение → 422.
@@ -72,7 +72,7 @@
 **Что сделать во фронте**
 - Экран «Настройки»:
   - переключатель «Ручной / Автоматический» (`auto_mode`);
-  - сортировка (4 варианта, активна только в авторежиме);
+  - сортировка `queue_sort` (4 варианта) уже есть на вкладке «Очередь» — она общая для пакета и авторежима, отдельную не добавлять;
   - выбор набора (`auto_dataset`);
   - выбор модели Gemini/Локальная (`llm_profile`) рядом с результатом `GET /settings/models` (зелёный — доступна, красный — текст `error`).
 - Список диалогов: в каждой строке бейдж статуса (в очереди №N / анализируется · ~Xс / ошибка / пропущен) и иконка ошибки с `status_error` во всплывающей подсказке. У `failed` кнопка «Повторить» → `POST /api/evaluate {conversation_id}`.
@@ -86,14 +86,14 @@
 **Что изменилось в бэкенде**
 - Фоновый воркер живёт всё время работы сервера. При `auto_mode: true` он по одному берёт **неоценённые** диалоги без статуса:
   - фильтр `auto_dataset`;
-  - сортировка `auto_sort`;
+  - сортировка `queue_sort`;
   - каналы из `EXCLUDE_CHANNELS` пропускаются.
 - Упавшие (`failed`) и пропущенные (`skipped`) диалоги воркер **не повторяет**, нужен ручной Retry. Устаревшие оценки (после смены чек-листа) тоже не трогает, их переоценивают вручную.
 - Пока идёт ручная пакетная оценка, воркер стоит на паузе.
-- Новая настройка `auto_calls: "mixed" | "first" | "last"` (по умолчанию `mixed`) в `GET/PATCH /api/settings`: звонки (диалоги с `audio_url`) идут вперемешку с чатами, все сначала или все в конце. Внутри каждой группы порядок по-прежнему задаёт `auto_sort`. В `upcoming` у каждого элемента есть `is_call`, в `queue.worker` — `auto_calls`.
+- Новая настройка `auto_calls: "mixed" | "first" | "last"` (по умолчанию `mixed`) в `GET/PATCH /api/settings`: звонки (диалоги с `audio_url`) идут вперемешку с чатами, все сначала или все в конце. Внутри каждой группы порядок по-прежнему задаёт `queue_sort`. В `upcoming` у каждого элемента есть `is_call`, в `queue.worker` — `auto_calls`.
 - `GET /api/worker` → `{alive, mode: manual|auto, status: idle|running|paused|error, reason, current, processed, failed, last_tick, last_error}`.
 - `GET /api/queue` дополнительно содержит:
-  - `worker` (то же, что и выше, плюс `auto_mode`, `auto_sort`, `auto_dataset`);
+  - `worker` (то же, что и выше, плюс `auto_mode`, `queue_sort`, `auto_dataset`);
   - `upcoming` — очередь воркера в порядке обработки, с `position` и `eta_sec`.
 - `eta_sec` в `GET /api/conversations` заполняется и для диалогов из `upcoming`.
 

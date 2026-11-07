@@ -1,10 +1,12 @@
 import { API_URL } from '../lib/constants'
 
 export class ApiError extends Error {
-  constructor(status, detail) {
+  constructor(status, detail, code = null) {
     super(detail || `HTTP ${status}`)
     this.status = status
     this.detail = detail
+    // Машинный код причины (X-Error-Code), например job_running или no_checklist у 409
+    this.code = code
   }
 }
 
@@ -34,6 +36,6 @@ export async function request(path, { method = 'GET', params, json, formData } =
     throw new ApiError(0)
   }
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new ApiError(response.status, readDetail(body))
+  if (!response.ok) throw new ApiError(response.status, readDetail(body), response.headers.get('X-Error-Code'))
   return body
 }

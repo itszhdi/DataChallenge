@@ -7,6 +7,7 @@ import { Checkbox, Field, Input, Select } from '../ui/Field'
 import Slider from '../ui/Slider'
 import { ErrorState, LoadingState } from '../ui/States'
 import Switch from '../ui/Switch'
+import AutoModeSettings from './AutoModeSettings'
 
 const QUEUE_SORTS = ['short_first', 'long_first', 'newest_first', 'oldest_first']
 const MIN_THREADS = 1
@@ -27,7 +28,7 @@ export default function QueueSettings() {
         <Card className="pb-5">
           <CardHeader title={t('settings.queue.priorityTitle')} />
           <div className="space-y-4 px-5">
-            <Field label={t('settings.queue.sort')}>
+            <Field label={t('settings.queue.sort')} hint={t('settings.queue.sortHint')}>
               <Select value={form.queue_sort} onChange={(event) => change('queue_sort', event.target.value)}>
                 {QUEUE_SORTS.map((sort) => (
                   <option key={sort} value={sort}>
@@ -90,6 +91,7 @@ export default function QueueSettings() {
           {t('settings.save')}
         </Button>
       </div>
+      <AutoModeSettings />
     </div>
   )
 }

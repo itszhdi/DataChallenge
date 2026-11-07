@@ -68,7 +68,7 @@ make models && make use-local
 - **Ручной** (по умолчанию): одиночная оценка, пакет (`make batch DATASET=DEV`) или переоценка (`MODE=reapply`).
 - **Автоматический**: фоновый воркер по одному берёт **неоценённые** диалоги и оценивает активной моделью.
   ```bash
-  make auto-on SORT=size_asc CALLS=last   # SORT: date_asc|date_desc|size_asc|size_desc; CALLS: mixed|first|last
+  make auto-on SORT=short_first CALLS=last   # SORT: short_first|long_first|newest_first|oldest_first; CALLS: mixed|first|last
   make worker                              # состояние: running / paused / idle
   make auto-off
   ```
@@ -149,7 +149,7 @@ make models && make use-local
 | Метод | Путь | Назначение |
 |---|---|---|
 | GET | `/health` | Активный профиль, провайдер, модель |
-| GET / PATCH | `/settings` | `auto_mode`, `auto_sort`, `auto_calls`, `auto_dataset`, `llm_profile`, `call_transcript` + описание профилей |
+| GET / PUT / PATCH | `/settings` | `queue_sort`, `only_missing`, `include_errors`, `concurrency`, `request_delay_ms`, `auto_evaluate_on_import`, `default_group_id`, `auto_mode`, `auto_calls`, `auto_dataset`, `llm_profile`, `call_transcript` + описание профилей |
 | GET | `/settings/models` | Доступность профилей (ключ Gemini, запущен ли LM Studio, загружена ли модель) |
 | GET | `/worker` | Состояние авто-воркера |
 | GET | `/datasets` | Загруженные наборы |

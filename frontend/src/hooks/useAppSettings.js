@@ -19,6 +19,8 @@ export function useAppSettingsForm() {
     mutationFn: updateSettings,
     onSuccess: (saved) => {
       queryClient.setQueryData(['settings'], saved)
+      // Сортировка, модель и авторежим меняют порядок и ETA очереди — перезапрашиваем её сразу
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
       setEdits({})
       toast.success(t('settings.saved'))
     },
