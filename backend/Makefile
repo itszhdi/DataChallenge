@@ -30,7 +30,7 @@ analytics:
 	@curl -s "localhost:$(PORT)/api/analytics?dataset=$(DATASET)"
 
 golden:
-	@uv run cqa golden $(or $(FILE),tests/golden.csv)
+	@uv run python -m src.cli golden $(or $(FILE),tests/golden.csv) $(if $(PROFILE),--profile $(PROFILE)) $(if $(LIMIT),--limit $(LIMIT))
 
 docker-build:
 	docker compose build

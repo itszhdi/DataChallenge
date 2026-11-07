@@ -11,25 +11,33 @@ import Button from '../ui/Button'
 import DataTable from '../ui/DataTable'
 import ChannelBadge from './ChannelBadge'
 
+// Состояние строки по приоритету: живая задача → статус в БД (переживает F5, виден авто-воркер) → результат оценки
+function rowState(row, live, failure, position) {
+  const withEta = row.eta_sec ? ` · ~${formatClock(row.eta_sec)}` : ''
+  const persisted = live ? null : row.status
+  if (live === 'analyzing' || persisted === 'running') return { tone: 'info', key: 'status.analyzing', suffix: withEta }
+  if (live === 'queued' || persisted === 'queued') return { tone: 'info', key: 'status.queued', suffix: withEta }
+  if (failure) return { tone: 'danger', key: 'status.failed', title: { key: `jobError.${failure}.title` } }
+  if (row.status === 'failed') return { tone: 'danger', key: 'status.failed', title: row.status_error }
+  if (!row.last_evaluation_id && row.status === 'skipped') return { key: 'status.skipped', title: row.status_error }
+  if (!row.last_evaluation_id && position) return { tone: 'info', key: 'status.upcoming', params: { position }, suffix: withEta }
+  if (row.excluded) return { key: 'status.excluded', title: { key: 'status.excludedHint' } }
+  if (!row.last_evaluation_id) return { key: 'status.notEvaluated' }
+  if (row.gross_error) return { tone: 'danger', key: 'status.gross' }
+  if (row.preliminary) return { tone: 'warning', key: 'status.preliminary' }
+  return { tone: 'success', key: 'status.evaluated' }
+}
+
 function DialogStatus({ row, statuses, failures, upcoming }) {
   const { t } = useTranslation()
-  const status = statuses.get(row.id)
-  const failure = failures.get(row.id)
-  const eta = row.eta_sec ? ` · ~${formatClock(row.eta_sec)}` : ''
-  if (status === 'analyzing' || (!status && row.status === 'running')) return <Badge tone="info">{t('status.analyzing')}{eta}</Badge>
-  if (status === 'queued' || (!status && row.status === 'queued')) return <Badge tone="info">{t('status.queued')}{eta}</Badge>
-  if (failure) return <Badge tone="danger" title={t(`jobError.${failure}.title`, { defaultValue: '' })}>{t('status.failed')}</Badge>
-  // Статус из БД переживает перезагрузку страницы и показывает работу авто-воркера
-  if (row.status === 'failed') return <Badge tone="danger" title={row.status_error ?? undefined}>{t('status.failed')}</Badge>
-  if (row.status === 'skipped' && !row.last_evaluation_id) return <Badge title={row.status_error ?? undefined}>{t('status.skipped')}</Badge>
-  if (!row.last_evaluation_id && upcoming.has(row.id)) {
-    return <Badge tone="info">{t('status.upcoming', { position: upcoming.get(row.id) })}{eta}</Badge>
-  }
-  if (row.excluded) return <Badge title={t('status.excludedHint')}>{t('status.excluded')}</Badge>
-  if (!row.last_evaluation_id) return <Badge>{t('status.notEvaluated')}</Badge>
-  if (row.gross_error) return <Badge tone="danger">{t('status.gross')}</Badge>
-  if (row.preliminary) return <Badge tone="warning">{t('status.preliminary')}</Badge>
-  return <Badge tone="success">{t('status.evaluated')}</Badge>
+  const state = rowState(row, statuses.get(row.id), failures.get(row.id), upcoming.get(row.id))
+  const title = state.title?.key ? t(state.title.key, { defaultValue: '' }) : state.title
+  return (
+    <Badge tone={state.tone} title={title || undefined}>
+      {t(state.key, state.params)}
+      {state.suffix}
+    </Badge>
+  )
 }
 
 const INITIAL_SORTING = [{ id: 'imported_at', desc: true }]

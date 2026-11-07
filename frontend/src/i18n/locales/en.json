@@ -343,7 +343,7 @@
       "includeErrorsHint": "Dialogs with a preliminary score, where some criteria have no model answer",
       "performanceTitle": "Performance",
       "concurrency": "Parallel threads",
-      "concurrencyHint": "Limit that protects against API rate limits. For a local model, keep it at or below the parallel requests set in LM Studio.",
+      "concurrencyHint": "Limit that protects against API rate limits. For a local model, keep it at or below the parallel requests set in LM Studio. A new thread count applies from the next batch; the delay and model apply immediately.",
       "delay": "Delay between requests, ms",
       "delayHint": "Minimum pause between model requests",
       "autoEvaluate": "Evaluate automatically right after importing a new dataset",
@@ -498,7 +498,8 @@
       "running": "Auto-check: analyzing {{id}}",
       "paused": "Auto-check paused — a batch is running",
       "idle": "Auto-check: no new dialogs",
-      "error": "Auto-check error — {{error}}"
+      "error": "Auto-check error — {{error}}",
+      "active": "Auto-check is running"
     }
   }
 }

@@ -7,7 +7,8 @@ import Button from '../ui/Button'
 function workerText(worker, t) {
   if (worker.status === 'error') return t('queue.worker.error', { error: worker.last_error ?? worker.reason })
   if (worker.mode !== 'auto') return t('queue.worker.manual')
-  if (worker.status === 'running') return t('queue.worker.running', { id: displayId(worker.current) })
+  // Между диалогами воркер на миг остаётся running без current — показываем общее «работает»
+  if (worker.status === 'running') return worker.current ? t('queue.worker.running', { id: displayId(worker.current) }) : t('queue.worker.active')
   if (worker.status === 'paused') return t('queue.worker.paused')
   return t('queue.worker.idle')
 }
