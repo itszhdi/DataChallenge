@@ -2,7 +2,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-ANSWER_FIELDS = ("explanation", "evidence_ids", "checked_range", "flags")
+ANSWER_FIELDS = ("explanation", "evidence_ids", "checked_range", "flags", "needs_review", "unverified_claims")
 
 
 def _d(value: Any) -> Decimal:

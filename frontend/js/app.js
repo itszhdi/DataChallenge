@@ -177,7 +177,7 @@
     const criterionVersions = [...new Set(Object.values(meta.criteria_prompt_versions || {}).filter(Boolean))];
     const promptLabel = meta.prompt_version ? `промпт ${esc(meta.prompt_version)}` : 'версия промпта не сохранена';
     const mixedPromptLabel = criterionVersions.length > 1 ? ` · версии критериев ${criterionVersions.map(esc).join(', ')}` : '';
-    const metaLine = `${esc(meta.model || '')} · ${promptLabel}${mixedPromptLabel}${meta.seconds ? ` · ${meta.seconds} с` : ''}${tokens}${meta.reapplied_from ? ` · перенесено из оценки #${meta.reapplied_from}` : ''}`;
+    const metaLine = `${esc(meta.model || '')}${meta.fallback_used ? ' · резервная модель' : ''} · ${promptLabel}${mixedPromptLabel}${meta.seconds ? ` · ${meta.seconds} с` : ''}${tokens}${meta.reapplied_from ? ` · перенесено из оценки #${meta.reapplied_from}` : ''}`;
     const warns = f.warnings.length ? `<details class="small" style="margin-top:10px"><summary>Предупреждения (${f.warnings.length})</summary>${f.warnings.map((w) => `<div>• ${esc(w)}</div>`).join('')}</details>` : '';
     const crits = f.criteria.map((i) => critHtml(card, i)).join('');
     return `<div class="panel"><div class="row" style="align-items:flex-start;gap:22px"><div class="ring" style="--p:${f.total || 0};--c:${col}"><div><div><b>${fmt(f.total)}</b><small>из 100</small></div></div></div>
@@ -212,7 +212,7 @@
     const hist = aps.length ? `<div class="hist">${aps.map((a) => `Апелляция #${a.id} (${a.status === 'open' ? 'на рассмотрении' : 'решена'}): «${esc(a.comment)}»${a.status === 'resolved' ? `<br>${a.decision === 'changed' ? `Исходная оценка: <b>${esc(ansLabel(orig, c))}</b> → решение: <b>${esc(ansLabel({ ...it, ...a.new_answer, type: it.type }, c))}</b>` : 'Оценка подтверждена'} — ${esc(a.reason)}` : ''}`).join('<br>')}</div>` : '';
     return `<div class="crit ${it.na ? 'na' : ''}"><div class="crit-h"><h3>${esc(it.title)}</h3><span class="${ansTag(it, c)}">${esc(ansLabel(it, c))}</span>${pts}
       ${open ? '<span class="tag gold">апелляция открыта</span>' : `<button class="btn sm" data-act="appeal" data-c="${esc(it.id)}">Оспорить</button>`}</div>
-      <p>${esc(it.explanation || 'Нет данных')}</p>${it.checked_range ? `<p class="small">Проверенный участок: ${esc(it.checked_range)}</p>` : ''}
+      <p>${esc(it.explanation || 'Нет данных')}</p>${it.needs_review ? `<div class="hist" style="border-color:var(--amber);color:var(--amber)"><b>Требуется ручная проверка</b>${(it.unverified_claims || []).length ? `<ul>${it.unverified_claims.map((claim) => `<li>${esc(claim)}</li>`).join('')}</ul>` : '<div>Недостаточно подтверждений в записи.</div>'}</div>` : ''}${it.checked_range ? `<p class="small">Проверенный участок: ${esc(it.checked_range)}</p>` : ''}
       ${it.na && c.na_condition ? `<p class="small">Условие N/A: ${esc(c.na_condition)}</p>` : ''}${quotes}${chips ? `<div class="row" style="gap:6px">${chips}</div>` : ''}${hist}</div>`;
   }
   function appealModal(critId) {

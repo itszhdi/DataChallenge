@@ -83,9 +83,15 @@ def validate_answers(
         if is_no and not checked and not evidence:
             warnings.append(f"{cid}: «Нет» без доказательств и проверенного участка")
 
+        raw_claims = a.get("unverified_claims")
+        if not isinstance(raw_claims, list):
+            raw_claims = []
+        claims = [x.strip()[:500] for x in raw_claims if isinstance(x, str) and x.strip()][:10]
         answer = {
             "status": "ok", "na": na, "value": None if na else value, "explanation": (a.get("explanation") or "").strip(),
             "evidence_ids": evidence, "checked_range": checked, "flags": flags,
+            "needs_review": bool(a.get("needs_review")) or bool(claims),
+            "unverified_claims": claims,
         }
         # Preserve the exact quote and its verification result for review/debugging.
         if "quote" in a:
@@ -110,7 +116,11 @@ async def run_llm(
     ]
     messages = build_messages(checklist, conversation, criteria)
     try:
-        raw, meta = await llm.complete_json(messages, build_schema(criteria))
+        selected_model = llm.model_for_channel(conversation.get("channel"))
+        if selected_model == llm.model:
+            raw, meta = await llm.complete_json(messages, build_schema(criteria))
+        else:
+            raw, meta = await llm.complete_json(messages, build_schema(criteria), channel=conversation.get("channel"))
     except LLMError as e:
         logger.error("Evaluation failed for %s: %s", conversation["id"], e)
         raise LLMUnavailable(str(e)) from e
@@ -246,7 +256,7 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
         new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)
         answers.update(new_answers)
         meta["llm"] = {k: v for k, v in llm_meta.items() if k not in ("warnings", "evaluated_criteria")}
-        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd", "prompt_version") if k in llm_meta})
+        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd", "prompt_version", "fallback_used") if k in llm_meta})
         criteria_versions.update(llm_meta.get("criteria_prompt_versions") or {})
         old_warnings += llm_meta["warnings"]
     meta["criteria_prompt_versions"] = criteria_versions
