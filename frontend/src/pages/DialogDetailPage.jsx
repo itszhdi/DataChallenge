@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LuArrowLeft, LuListChecks, LuPlay } from 'react-icons/lu'
+import { LuArrowLeft, LuDownload, LuListChecks, LuPlay } from 'react-icons/lu'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { audioUrl } from '../api/conversations'
 import AppealModal from '../components/detail/AppealModal'
 import AudioPlayer from '../components/detail/AudioPlayer'
 import CriterionCard from '../components/detail/CriterionCard'
+import OperatorReportModal from '../components/detail/OperatorReportModal'
 import ScoreSummary from '../components/detail/ScoreSummary'
 import Transcript from '../components/detail/Transcript'
 import ChannelBadge from '../components/dialogs/ChannelBadge'
@@ -37,6 +38,7 @@ export default function DialogDetailPage() {
   const audioRef = useRef(null)
   const [focus, setFocus] = useState(initialTurn ? { turn: initialTurn, nonce: 0 } : null)
   const [appealTarget, setAppealTarget] = useState(null)
+  const [isReportOpen, setReportOpen] = useState(false)
 
   const turns = useMemo(() => conversation.data?.transcript ?? [], [conversation.data])
   const hasAudio = Boolean(conversation.data?.audio_url)
@@ -107,6 +109,16 @@ export default function DialogDetailPage() {
               ))}
             </Select>
           )}
+          {result && (
+            <Button
+              icon={LuDownload}
+              disabled={!result.operator_summary}
+              title={result.operator_summary ? undefined : t('report.unavailable')}
+              onClick={() => setReportOpen(true)}
+            >
+              {t('report.export')}
+            </Button>
+          )}
           {isExcluded ? (
             <Badge title={t('status.excludedHint')}>{t('status.excluded')}</Badge>
           ) : (
@@ -162,6 +174,14 @@ export default function DialogDetailPage() {
           )}
         </div>
       </div>
+      {isReportOpen && (
+        <OperatorReportModal
+          conversationId={conv.id}
+          summary={result.operator_summary}
+          turns={turns}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
       {appealTarget && <AppealModal evaluationId={evaluationId} criterion={appealTarget} onClose={() => setAppealTarget(null)} />}
     </>
   )

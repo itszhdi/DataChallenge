@@ -81,7 +81,6 @@
     "evaluateAllConfirm": "Every dialog in the dataset will be evaluated again. This uses the model request quota.",
     "applyChecklist": "Apply active checklist",
     "applyChecklistHint": "The model is called only for changed criteria",
-    "export": "Export JSON",
     "evaluate": "Evaluate",
     "reevaluate": "Re-evaluate",
     "empty": "Import a dataset with the Import button.",
@@ -103,18 +102,6 @@
     "fromUrl": "Load from link",
     "fromFile": "Upload JSON file",
     "done": "Imported: {{count}}, skipped: {{skipped}} (dataset {{dataset}})"
-  },
-  "export": {
-    "title": "Export evaluations",
-    "description": "JSON with final scores, including appeal decisions.",
-    "team": "Team name",
-    "mode": "Model mode",
-    "modeAuto": "Detect automatically",
-    "model": "Model name",
-    "modelHint": "If empty, the backend model is used",
-    "submit": "Download JSON",
-    "empty": "Evaluate some dialogs first",
-    "done": "File downloaded: {{count}} evaluations"
   },
   "job": {
     "evaluate": "Evaluating dialogs",
@@ -420,5 +407,21 @@
       "title": "This dialog has no evaluation yet",
       "action": "Evaluate the dialog first, then apply the checklist."
     }
+  },
+  "report": {
+    "export": "Export",
+    "title": "Operator report",
+    "description": "Dialog summary: what went well and what to improve. The file downloads as TXT.",
+    "submit": "Download report",
+    "done": "Report downloaded",
+    "unavailable": "This backend version does not build the operator summary",
+    "heading": "Operator summary · dialog {{id}}",
+    "strengths": "What went well:",
+    "improvements": "What to improve:",
+    "review": "Needs review:",
+    "critical": "Important: {{title}}",
+    "reason": "Reason",
+    "nextTime": "Next time",
+    "quote": "Quote from the dialog"
   }
 }

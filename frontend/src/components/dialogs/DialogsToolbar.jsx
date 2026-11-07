@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LuDownload, LuListChecks, LuPlay, LuRefreshCw, LuUpload } from 'react-icons/lu'
+import { LuListChecks, LuPlay, LuRefreshCw, LuUpload } from 'react-icons/lu'
 import { useDataset } from '../../hooks/useDataset'
 import Button from '../ui/Button'
 import ConfirmModal from '../ui/ConfirmModal'
-import ExportModal from './ExportModal'
 import ImportModal from './ImportModal'
 
 export default function DialogsToolbar({ hasDialogs, isRunning, startBatch, trackJob }) {
@@ -28,11 +27,7 @@ export default function DialogsToolbar({ hasDialogs, isRunning, startBatch, trac
       <Button icon={LuListChecks} disabled={disabled} title={t('dialogs.applyChecklistHint')} onClick={() => run('reapply', false)}>
         {t('dialogs.applyChecklist')}
       </Button>
-      <Button icon={LuDownload} onClick={() => setModal('export')}>
-        {t('dialogs.export')}
-      </Button>
       <ImportModal open={modal === 'import'} onClose={closeModal} onJobStarted={trackJob} />
-      <ExportModal open={modal === 'export'} onClose={closeModal} />
       <ConfirmModal
         open={modal === 'confirm'}
         onClose={closeModal}
