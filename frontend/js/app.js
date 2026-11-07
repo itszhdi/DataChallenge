@@ -7,7 +7,8 @@
 
   let S;
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
-  if (!S) S = { records: [], checklists: [clone(window.DEFAULT_CHECKLIST)], activeCl: 'cl-default', results: {}, appeals: [], endpoint: '', apiUrl: '', ui: { view: 'dialogs' } };
+  if (!S) S = { records: [], checklists: [clone(window.DEFAULT_CHECKLIST)], activeCl: 'cl-default', results: {}, appeals: [], endpoint: '', apiUrl: '', exportMeta: { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' }, ui: { view: 'dialogs' } };
+  S.exportMeta = S.exportMeta || { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' };
   S.ui = S.ui || { view: 'dialogs' };
   let draft = null;
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
@@ -60,7 +61,9 @@
       <p class="small" style="margin:8px 0 0">Если браузер блокирует запрос (CORS), загрузите ответ API файлом или проксируйте через бэкенд.</p></div>
     <div class="panel" style="margin-top:18px"><div class="row"><h2 style="margin:0">Диалоги · ${S.records.length}</h2><div class="spacer"></div>
       <span class="small">Чек-лист:</span><select id="cl-select" style="width:auto">${S.checklists.map((c) => `<option value="${c.id}" ${c.id === S.activeCl ? 'selected' : ''}>${esc(c.name)} v${c.version}</option>`).join('')}</select>
-      <button class="btn primary" data-act="evalall" ${S.records.length ? '' : 'disabled'}>Оценить все</button></div>
+      <button class="btn primary" data-act="evalall" ${S.records.length ? '' : 'disabled'}>Оценить все</button>
+      <button class="btn" data-act="export-results" ${Object.keys(S.results).length ? '' : 'disabled'}>Скачать оценки JSON</button></div>
+      <div class="row" style="margin-top:10px"><label class="small">Команда <input id="export-team" value="${esc(S.exportMeta.teamName)}"></label><label class="small">Режим модели <select id="export-mode"><option value="local" ${S.exportMeta.modelMode === 'local' ? 'selected' : ''}>local</option><option value="remote" ${S.exportMeta.modelMode === 'remote' ? 'selected' : ''}>remote</option></select></label><label class="small">Модель <input id="export-model" value="${esc(S.exportMeta.modelName)}"></label></div>
       ${S.records.length ? `<table style="margin-top:12px"><thead><tr><th>ID</th><th>Канал</th><th>Язык</th><th>Реплик</th><th>Итог</th><th>Флаг</th><th>Апеляций</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">Загрузите диалоги: по URL, файлом или демо-набором.</div>'}</div>`;
   }
 
@@ -79,6 +82,33 @@
     toast('Идёт оценка…');
     try { for (const id of ids) await evaluate(id); toast(`Оценено диалогов: ${ids.length}`); } catch (e) { toast('Ошибка: ' + e.message); }
     render();
+  }
+
+  function exportResults() {
+    const results = S.records.filter((r) => S.results[r.conversation_id]).map((record) => {
+      const stored = S.results[record.conversation_id];
+      const calc = Scoring.compute(stored.checklist, stored.items);
+      const criteria = stored.checklist.criteria.map((c) => {
+        const item = stored.items[c.id] || {};
+        const answer = Scoring.finalAnswer(item);
+        const value = answer === undefined || answer === null || answer === 'na'
+          ? null : c.type === 'flag' ? answer === 'yes' : c.type === 'scale' ? Number(answer) : answer === 'yes';
+        return {
+          criterion_id: c.id,
+          value,
+          rationale: item.decision ? `${item.explanation || ''}${item.decision.reason ? ` Решение проверяющего: ${item.decision.reason}` : ''}`.trim() : (item.explanation || ''),
+          evidence_turns: (item.evidence || []).filter((i) => Number.isInteger(i) && i >= 0 && i < record.transcript.length).map((i) => i + 1)
+        };
+      });
+      return { conversation_id: record.conversation_id, status: 'ok', criteria, score: { final_score: calc.total, critical_flag: calc.flag } };
+    });
+    if (!results.length) return toast('Сначала оцените хотя бы один диалог');
+    const payload = { schema_version: '1.0', team_name: S.exportMeta.teamName || 'Название команды', model: { mode: S.exportMeta.modelMode || 'local', name: S.exportMeta.modelName || 'Название модели' }, results };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = `cqa-results-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Скачан JSON: ${results.length} оценок`);
   }
 
   /* ---------- Карточка ---------- */
@@ -279,6 +309,7 @@
     }
     if (a === 'evalone') { e.stopPropagation(); await evaluateMany([id]); return; }
     if (a === 'evalall') return evaluateMany(S.records.map((r) => r.conversation_id));
+    if (a === 'export-results') return exportResults();
     if (a === 'jump') return jump(+t.dataset.i);
     if (a === 'seek') { const p = $('#player'), r = rec(S.ui.cardId); if (p && r) { S.ui.lastSeek = +t.dataset.i; p.currentTime = Math.max(0, offsetSec(r, +t.dataset.i) + shiftOf(r.conversation_id)); p.play().catch(() => {}); } return jump(+t.dataset.i); }
     if (a === 'syncpos') { const p = $('#player'), r = rec(S.ui.cardId), i = S.ui.lastSeek; if (!p || !r || i === undefined) return toast('Сначала нажмите ▶ у реплики'); S.audioShift = S.audioShift || {}; S.audioShift[r.conversation_id] = Math.round((p.currentTime - offsetSec(r, i)) * 10) / 10; $('#shift').value = S.audioShift[r.conversation_id]; save(); return toast('Сдвиг сохранён: ' + S.audioShift[r.conversation_id] + ' с'); }
@@ -315,6 +346,9 @@
   document.addEventListener('input', (e) => {
     const f = e.target.dataset;
     if (e.target.id === 'endpoint') { S.endpoint = e.target.value.trim(); return save(); }
+    if (e.target.id === 'export-team') { S.exportMeta.teamName = e.target.value; return save(); }
+    if (e.target.id === 'export-mode') { S.exportMeta.modelMode = e.target.value; return save(); }
+    if (e.target.id === 'export-model') { S.exportMeta.modelName = e.target.value; return save(); }
     if (e.target.id === 'shift') { const r = rec(S.ui.cardId); S.audioShift = S.audioShift || {}; S.audioShift[r.conversation_id] = Number(e.target.value) || 0; return save(); }
     if (e.target.id === 'audioproxy') { S.audioProxy = e.target.value.trim(); return save(); }
     if (f.cl === 'name') { draft.name = e.target.value; return; }
@@ -328,6 +362,7 @@
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'cl-select') { S.activeCl = e.target.value; render(); }
+    if (e.target.id === 'export-mode') { S.exportMeta.modelMode = e.target.value; save(); }
     if (e.target.id === 'file-in' && e.target.files[0]) {
       const fr = new FileReader();
       fr.onload = () => { try { loadRecords(JSON.parse(fr.result)); toast('Загружено записей: ' + S.records.length); } catch (err) { toast('Ошибка файла: ' + err.message); } render(); };
