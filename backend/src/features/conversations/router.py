@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, status
 
 from src import db
+from src.features.evaluation.service import list_conversations_with_scores
 from src.features.evaluation.timing import with_offsets
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -10,8 +11,7 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 @router.get("")
 async def list_conversations(dataset: str | None = None) -> list[dict]:
-    # TODO этап 2: добавить итог и флаг грубых ошибок по последней оценке
-    return await asyncio.to_thread(db.list_conversations, dataset)
+    return await asyncio.to_thread(list_conversations_with_scores, dataset)
 
 
 @router.get("/{conversation_id}")

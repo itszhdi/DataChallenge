@@ -29,3 +29,15 @@ def test_first_response_exceeded():
     facts = timing_facts(tr, 180)
     assert facts["first_response_sec"] == 265 and facts["first_response_exceeded"]
     assert facts["long_pauses"][0]["seconds"] == 265
+
+
+def test_gemini_schema_strips_unsupported():
+    from src.llm.client import extract_json, gemini_schema
+
+    schema = {"type": "object", "additionalProperties": False, "properties": {
+        "v": {"type": "integer", "enum": [0, 5, 10]}, "f": {"type": "string", "enum": ["insult"]}}}
+    out = gemini_schema(schema)
+    assert "additionalProperties" not in out
+    assert "enum" not in out["properties"]["v"] and "0, 5, 10" in out["properties"]["v"]["description"]
+    assert out["properties"]["f"]["enum"] == ["insult"]
+    assert extract_json('```json\n{"a": 1}\n```') == {"a": 1}
