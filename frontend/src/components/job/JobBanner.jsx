@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { LuLoaderCircle } from 'react-icons/lu'
 import { useJob } from '../../hooks/useJob'
 import { useNow } from '../../hooks/useNow'
-import { formatClock } from '../../lib/format'
+import { displayId, formatClock } from '../../lib/format'
 import ProgressBar from '../ui/ProgressBar'
 
 const MS_IN_SECOND = 1000
@@ -41,7 +41,7 @@ export default function JobBanner() {
       </div>
       <ProgressBar label={label} value={(job.processed / job.total) * 100} indeterminate={job.processed === 0} tone={job.failed.length ? 'warning' : 'success'} />
       <p className="mt-1.5 truncate text-xs text-ink-muted">
-        {job.current.length ? t('job.current', { ids: job.current.join(', ') }) : t('job.waiting')}
+        {job.current.length ? t('job.current', { ids: job.current.map(displayId).join(', ') }) : t('job.waiting')}
       </p>
     </section>
   )

@@ -31,7 +31,8 @@ export function useAppSettingsForm() {
     form,
     change: (field, value) => setEdits((current) => ({ ...current, [field]: value })),
     isDirty: Object.keys(edits).length > 0,
-    save: () => save.mutate(form),
+    // Бэкенд обновляет частично: отправляем только правки, чтобы не затереть авторежим и модель, изменённые в другом месте
+    save: () => save.mutate(edits),
     isSaving: save.isPending,
   }
 }

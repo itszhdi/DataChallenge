@@ -23,17 +23,21 @@ export default function TurnMessage({ turn, highlighted, flash, onPlay }) {
       )}
     >
       <div className="mb-1 flex items-center gap-2 text-xs not-italic">
-        <b>{t(`speaker.${turn.speaker}`, { defaultValue: turn.speaker })}</b>
+        <b>
+          {t(`speaker.${turn.speaker}`, { defaultValue: turn.speaker })}
+          {turn.speaker === 'unknown' && turn.speaker_raw && ` (${turn.speaker_raw})`}
+        </b>
         <span className="text-ink-muted tabular-nums" title={turn.timestamp}>
           #{turn.index} · {formatClock(turn.offset_sec)}
         </span>
+        {turn.pre_recording && <span className="text-ink-muted">· {t('detail.preRecording')}</span>}
         {onPlay && (
           <button type="button" onClick={onPlay} aria-label={t('detail.playTurn', { turn: turn.index })} className="ml-auto text-ink-muted hover:text-brand-text">
             <LuPlay className="size-4" />
           </button>
         )}
       </div>
-      <p className="break-words whitespace-pre-wrap">{turn.text}</p>
+      <p className={clsx('break-words whitespace-pre-wrap', turn.empty && 'text-ink-muted')}>{turn.empty || !turn.text ? t('detail.emptyTurn') : turn.text}</p>
     </div>
   )
 }

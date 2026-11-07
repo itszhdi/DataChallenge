@@ -55,6 +55,11 @@ export default function CriterionCard({ item, original, criterion, appeals, turn
     <article className="border-b border-line p-5 last:border-0">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="mr-auto text-sm font-semibold">{title}</h3>
+        {item.needs_review && (
+          <Badge tone="warning" title={item.unverified_claims?.length ? item.unverified_claims.join('\n') : undefined}>
+            {t('detail.needsReview')}
+          </Badge>
+        )}
         <Badge tone={answerTone(item, scaleMax)}>{answerLabel(item, scaleMax, t)}</Badge>
         <Points item={item} />
         {!openAppeal && (

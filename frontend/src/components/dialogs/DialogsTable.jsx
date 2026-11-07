@@ -15,9 +15,12 @@ function DialogStatus({ row, statuses, failures }) {
   const { t } = useTranslation()
   const status = statuses.get(row.id)
   const failure = failures.get(row.id)
-  if (status === 'analyzing') return <Badge tone="info">{t('status.analyzing')}</Badge>
-  if (status === 'queued') return <Badge tone="info">{t('status.queued')}</Badge>
+  if (status === 'analyzing' || (!status && row.status === 'running')) return <Badge tone="info">{t('status.analyzing')}</Badge>
+  if (status === 'queued' || (!status && row.status === 'queued')) return <Badge tone="info">{t('status.queued')}</Badge>
   if (failure) return <Badge tone="danger" title={t(`jobError.${failure}.title`, { defaultValue: '' })}>{t('status.failed')}</Badge>
+  // Статус из БД переживает перезагрузку страницы и показывает работу авто-воркера
+  if (row.status === 'failed') return <Badge tone="danger" title={row.status_error ?? undefined}>{t('status.failed')}</Badge>
+  if (row.status === 'skipped' && !row.last_evaluation_id) return <Badge title={row.status_error ?? undefined}>{t('status.skipped')}</Badge>
   if (row.excluded) return <Badge title={t('status.excludedHint')}>{t('status.excluded')}</Badge>
   if (!row.last_evaluation_id) return <Badge>{t('status.notEvaluated')}</Badge>
   if (row.gross_error) return <Badge tone="danger">{t('status.gross')}</Badge>
@@ -38,7 +41,7 @@ export default function DialogsTable({ rows, statuses, failures, isBusy, onEvalu
 
   const columns = useMemo(
     () => [
-      { accessorKey: 'id', header: t('table.id'), cell: ({ getValue }) => <b>{getValue()}</b> },
+      { id: 'id', accessorFn: (row) => row.source_id ?? row.id, header: t('table.id'), cell: ({ getValue }) => <b>{getValue()}</b> },
       {
         accessorKey: 'channel',
         header: t('table.format'),

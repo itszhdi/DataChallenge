@@ -12,3 +12,6 @@ export const formatClock = (seconds) => {
   const minutes = String(Math.floor(whole / 60)).padStart(2, '0')
   return `${minutes}:${String(whole % 60).padStart(2, '0')}`
 }
+
+// Внутренний id диалога «НАБОР:исходный_id»: пользователю показываем исходный
+export const displayId = (id) => (typeof id === 'string' && id.includes(':') ? id.slice(id.indexOf(':') + 1) : id)

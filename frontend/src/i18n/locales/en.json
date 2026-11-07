@@ -30,7 +30,8 @@
     "operator": "Operator",
     "client": "Client",
     "bot": "Bot",
-    "system": "System"
+    "system": "System",
+    "unknown": "Unknown role"
   },
   "answer": {
     "yes": "Yes",
@@ -49,7 +50,8 @@
     "gross": "Critical violation",
     "preliminary": "Preliminary",
     "evaluated": "Evaluated",
-    "queued": "In queue"
+    "queued": "In queue",
+    "skipped": "Skipped"
   },
   "gross": {
     "insult": "Insulting the client",
@@ -101,7 +103,9 @@
     "urlHint": "If the organizers gave you a different address",
     "fromUrl": "Load from link",
     "fromFile": "Upload JSON file",
-    "done": "Imported: {{count}}, skipped: {{skipped}} (dataset {{dataset}})"
+    "done": "Imported: {{count}}, skipped: {{skipped}} (dataset {{dataset}})",
+    "warnings": "Import warnings: {{count}}",
+    "moreWarnings": "…and {{count}} more"
   },
   "job": {
     "evaluate": "Evaluating dialogs",
@@ -135,7 +139,8 @@
       "view": "View result",
       "retry": "Try again",
       "retryFailed": "Retry failed ones"
-    }
+    },
+    "alreadyRunning": "An evaluation is already running — showing its progress"
   },
   "detail": {
     "back": "Back to dialogs",
@@ -167,7 +172,11 @@
     "weightRedistributed": "weight redistributed",
     "weight": "weight {{value}}",
     "checkedRange": "Checked range",
-    "naCondition": "N/A condition"
+    "naCondition": "N/A condition",
+    "emptyTurn": "(empty)",
+    "preRecording": "before recording started",
+    "transcriptAsr": "Recognized from audio",
+    "needsReview": "Needs review"
   },
   "appeal": {
     "open": "Appeal",
@@ -406,6 +415,14 @@
     "no_evaluation": {
       "title": "This dialog has no evaluation yet",
       "action": "Evaluate the dialog first, then apply the checklist."
+    },
+    "not_evaluable": {
+      "title": "The dialog cannot be evaluated",
+      "action": "Its transcript is empty or has no operator messages. Check the source data."
+    },
+    "llm_quota": {
+      "title": "The model's daily quota is used up",
+      "action": "Switch to the local model in Settings or try again tomorrow."
     }
   },
   "report": {

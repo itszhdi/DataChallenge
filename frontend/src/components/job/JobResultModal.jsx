@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRotateCcw } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useJob } from '../../hooks/useJob'
+import { displayId } from '../../lib/format'
 import { startErrorCode, summarizeJob } from '../../lib/jobResult'
 import Button from '../ui/Button'
 import Modal from '../ui/Modal'
@@ -72,7 +73,7 @@ function FinishedResult({ job, onClose, onRetry }) {
             <Reasons groups={skippedGroups} />
           </div>
         )}
-        <TechnicalDetails lines={[...job.failed, ...job.skipped].map((item) => `${item.conversation_id}: ${item.reason}`)} />
+        <TechnicalDetails lines={[...job.failed, ...job.skipped].map((item) => `${displayId(item.conversation_id)}: ${item.reason}`)} />
         <div className="flex flex-wrap justify-end gap-2">
           {failed > 0 && (
             <Button icon={LuRotateCcw} onClick={() => onRetry(job)}>

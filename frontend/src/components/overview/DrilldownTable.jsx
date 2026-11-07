@@ -68,7 +68,7 @@ export default function DrilldownTable({ ref, data, filter, onReset }) {
     columns,
     state: { sorting },
     onSortingChange: setSorting,
-    getRowId: (row) => row.conversation_id,
+    getRowId: (row) => row.id ?? row.conversation_id,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -97,7 +97,7 @@ export default function DrilldownTable({ ref, data, filter, onReset }) {
         {rows.length ? (
           <DataTable
             table={table}
-            onRowClick={(row) => navigate(`/dialogs/${encodeURIComponent(row.conversation_id)}?evaluation=${row.evaluation_id}`)}
+            onRowClick={(row) => navigate(`/dialogs/${encodeURIComponent(row.id ?? row.conversation_id)}?evaluation=${row.evaluation_id}`)}
           />
         ) : (
           <EmptyState title={t('common.noData')} />

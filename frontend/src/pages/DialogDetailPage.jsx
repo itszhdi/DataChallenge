@@ -40,7 +40,8 @@ export default function DialogDetailPage() {
   const [appealTarget, setAppealTarget] = useState(null)
   const [isReportOpen, setReportOpen] = useState(false)
 
-  const turns = useMemo(() => conversation.data?.transcript ?? [], [conversation.data])
+  // Номера #N в доказательствах относятся к транскрипту, по которому оценивала модель (у звонков — распознанному)
+  const turns = useMemo(() => card.data?.conversation?.transcript ?? conversation.data?.transcript ?? [], [card.data, conversation.data])
   const hasAudio = Boolean(conversation.data?.audio_url)
   const isExcluded = allConversations?.find((item) => item.id === id)?.excluded
   const evidence = useMemo(() => new Set((card.data?.final.criteria ?? []).flatMap((item) => item.evidence_ids ?? [])), [card.data])
@@ -90,9 +91,10 @@ export default function DialogDetailPage() {
         <Link to="/dialogs" aria-label={t('detail.back')} className="flex size-10 items-center justify-center rounded-lg border border-line bg-surface hover:bg-surface-muted">
           <LuArrowLeft className="size-4" />
         </Link>
-        <h1 className="text-xl font-bold">{conv.id}</h1>
+        <h1 className="text-xl font-bold">{conv.source_id ?? conv.id}</h1>
         <ChannelBadge channel={conv.channel} />
         <Badge>{conv.language}</Badge>
+        {result?.conversation?.transcript_source === 'asr' && <Badge tone="info">{t('detail.transcriptAsr')}</Badge>}
         <span className="text-xs text-ink-muted">{t('detail.imported', { date: format.date(conv.imported_at) })}</span>
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
           {conv.evaluations.length > 1 && (
@@ -176,7 +178,7 @@ export default function DialogDetailPage() {
       </div>
       {isReportOpen && (
         <OperatorReportModal
-          conversationId={conv.id}
+          conversationId={conv.source_id ?? conv.id}
           summary={result.operator_summary}
           turns={turns}
           onClose={() => setReportOpen(false)}
