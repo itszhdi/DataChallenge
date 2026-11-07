@@ -81,3 +81,33 @@ async def test_full_flow(client):
     analytics = (await client.get("/api/analytics")).json()
     assert analytics["evaluated"] == 1 and analytics["worst"][0]["total"] == r["final_total"]
     assert eid != new_eid
+
+
+async def test_messy_import_and_id_collision(client):
+    import json
+
+    records = [
+        {"conversation_id": "s-ru-001", "channel": "agent chat", "language": "RU", "transcript": [
+            {"timestamp": None, "speaker": "client", "text": None, "file": {"type": "image", "name": "a.png"}},
+            {"timestamp": 12, "speaker": "operator", "text": "Здравствуйте!"},
+            {"speaker": "robot", "text": ["?"]},
+        ]},
+        {"conversation_id": "empty-1", "transcript": []},
+        {"conversation_id": "no-op", "transcript": [{"speaker": "client", "text": "алло"}]},
+        {"channel": "agent chat", "transcript": []},
+    ]
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+    r = (await client.post("/api/datasets/upload?dataset=OTHER", files={"file": ("x.json", json.dumps(records))})).json()
+    assert r["imported"] == 3 and r["skipped"] == 1 and r["warnings"]
+
+    # ** Одинаковый id в разных наборах — две разные записи
+    sample = (await client.get("/api/conversations/SAMPLE:s-ru-001")).json()
+    other = (await client.get("/api/conversations/OTHER:s-ru-001")).json()
+    assert len(sample["transcript"]) == 9 and len(other["transcript"]) == 3 and other["source_id"] == "s-ru-001"
+
+    for cid in ("OTHER:empty-1", "OTHER:no-op"):
+        assert (await client.post("/api/evaluate", json={"conversation_id": cid})).status_code == 422
+    assert (await client.post("/api/evaluate", json={"conversation_id": "OTHER:s-ru-001"})).status_code == 200
+    assert client.llm_calls
+    export = (await client.get("/api/export", params={"dataset": "OTHER"})).json()
+    assert [r["conversation_id"] for r in export["results"]] == ["s-ru-001"]

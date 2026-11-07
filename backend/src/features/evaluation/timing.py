@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Any
 
-SPEAKER_RU = {"operator": "оператор", "client": "клиент", "bot": "бот", "system": "система"}
+SPEAKER_RU = {"operator": "оператор", "client": "клиент", "bot": "бот", "system": "система", "unknown": "неизвестная роль"}
 
 
 def parse_timestamp(value: str | None) -> float | None:

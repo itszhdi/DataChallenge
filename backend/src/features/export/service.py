@@ -16,7 +16,7 @@ def _value(item: dict[str, Any]) -> Any:
 
 def build_export(dataset: str | None, team_name: str, model_mode: str, model_name: str) -> dict[str, Any]:
     results = []
-    for cid, s in sorted(summarize_latest(dataset).items()):
+    for _, s in sorted(summarize_latest(dataset).items()):
         score = s["score"]
         criteria = [
             {
@@ -28,7 +28,9 @@ def build_export(dataset: str | None, team_name: str, model_mode: str, model_nam
             for i in score["criteria"]
         ]
         results.append({
-            "conversation_id": cid,
+            # ** В выгрузку — исходный id организаторов, а не внутренний DEV:...
+            "conversation_id": s["evaluation"]["source_id"],
+            "dataset": s["evaluation"]["dataset"],
             "status": "partial" if score["preliminary"] else "ok",
             "criteria": criteria,
             "score": {"final_score": score["total"], "critical_flag": score["gross_errors"]["detected"]},

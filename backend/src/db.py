@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
     dataset TEXT NOT NULL,
+    seq INTEGER NOT NULL DEFAULT 0,
     channel TEXT,
     language TEXT,
     audio_url TEXT,
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     imported_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_conversations_dataset ON conversations(dataset);
+CREATE INDEX IF NOT EXISTS ix_conversations_source ON conversations(source_id);
 
 CREATE TABLE IF NOT EXISTS checklists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +63,8 @@ CREATE INDEX IF NOT EXISTS ix_appeals_evaluation ON appeals(evaluation_id);
 """
 
 JSON_FIELDS = {"transcript", "data", "answers", "meta", "new_answer"}
+# ! Меняется при несовместимом изменении схемы: старую БД нужно пересоздать (make clean-db)
+SCHEMA_VERSION = 2
 
 
 def _now() -> str:
@@ -99,28 +104,46 @@ def _dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+class SchemaOutdated(RuntimeError):
+    pass
+
+
 def init_db() -> None:
     path = get_settings().db_path
     with connect() as conn:
         conn.execute("PRAGMA journal_mode = WAL")
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations'").fetchone()
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if exists and version < SCHEMA_VERSION:
+            logger.error("Database schema v%s is outdated (need v%s), run `make clean-db` and re-import", version, SCHEMA_VERSION)
+            raise SchemaOutdated(f"{path}: schema v{version} < v{SCHEMA_VERSION}, run `make clean-db`")
         conn.executescript(SCHEMA)
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     logger.info("Database ready at %s", path)
 
 
 # * Диалоги
 
 
+def conversation_key(dataset: str, source_id: str) -> str:
+    # ** Внутренний id = набор + исходный id: одинаковые id из DEV и TEST не перезаписывают друг друга
+    return f"{dataset}:{source_id}"
+
+
 def upsert_conversations(dataset: str, records: list[dict[str, Any]]) -> int:
     now = _now()
     rows = [
-        (r["conversation_id"], dataset, r.get("channel"), r.get("language"), r.get("audio_url"), _dump(r["transcript"]), now)
+        (
+            conversation_key(dataset, r["conversation_id"]), r["conversation_id"], dataset, r.get("seq", 0),
+            r.get("channel"), r.get("language"), r.get("audio_url"), _dump(r["transcript"]), now,
+        )
         for r in records
     ]
     with connect() as conn:
         conn.executemany(
-            """INSERT INTO conversations (id, dataset, channel, language, audio_url, transcript, imported_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET dataset=excluded.dataset, channel=excluded.channel,
+            """INSERT INTO conversations (id, source_id, dataset, seq, channel, language, audio_url, transcript, imported_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET seq=excluded.seq, channel=excluded.channel,
                  language=excluded.language, audio_url=excluded.audio_url,
                  transcript=excluded.transcript, imported_at=excluded.imported_at""",
             rows,
@@ -129,16 +152,21 @@ def upsert_conversations(dataset: str, records: list[dict[str, Any]]) -> int:
 
 
 def get_conversation(conversation_id: str) -> dict[str, Any] | None:
+    # * Принимаем и внутренний id (DEV:p1-ru-001), и исходный, если он однозначен
     with connect() as conn:
-        return _row(conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,)).fetchone())
+        row = conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        if row is None:
+            rows = conn.execute("SELECT * FROM conversations WHERE source_id = ? LIMIT 2", (conversation_id,)).fetchall()
+            row = rows[0] if len(rows) == 1 else None
+        return _row(row)
 
 
 def list_conversations(dataset: str | None = None) -> list[dict[str, Any]]:
     # * Список без транскрипта + id последней оценки и число открытых апелляций по ней
     sql = """
-        SELECT c.id, c.dataset, c.channel, c.language, c.audio_url, c.imported_at, json_array_length(c.transcript) AS messages,
+        SELECT c.id, c.source_id, c.dataset, c.seq, c.channel, c.language, c.audio_url, c.imported_at, json_array_length(c.transcript) AS messages,
                (SELECT e.id FROM evaluations e WHERE e.conversation_id = c.id ORDER BY e.id DESC LIMIT 1) AS last_evaluation_id
-        FROM conversations c {where} ORDER BY c.id
+        FROM conversations c {where} ORDER BY c.dataset, c.seq, c.id
     """
     where, params = ("WHERE c.dataset = ?", (dataset,)) if dataset else ("", ())
     with connect() as conn:
@@ -237,7 +265,7 @@ def list_evaluations(conversation_id: str) -> list[dict[str, Any]]:
 def latest_evaluations(dataset: str | None = None) -> list[dict[str, Any]]:
     # * Последняя оценка по каждому диалогу (для аналитики и пакетных пересчётов)
     sql = """
-        SELECT e.*, c.language, c.channel, c.dataset FROM evaluations e
+        SELECT e.*, c.source_id, c.language, c.channel, c.dataset FROM evaluations e
         JOIN conversations c ON c.id = e.conversation_id
         WHERE e.id = (SELECT MAX(id) FROM evaluations WHERE conversation_id = e.conversation_id) {extra}
         ORDER BY e.conversation_id

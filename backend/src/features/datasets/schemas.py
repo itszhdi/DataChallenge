@@ -1,18 +1,31 @@
-from pydantic import BaseModel, Field, model_validator
+from typing import Any
 
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-class Message(BaseModel):
-    timestamp: str | None = None
-    speaker: str
-    text: str = ""
+from src.features.datasets.utils import normalize_transcript
 
 
 class Record(BaseModel):
-    conversation_id: str
+    # ** Строго проверяем только id и то, что транскрипт — список; реплики нормализуются, а не отбраковываются
+    conversation_id: str = Field(min_length=1)
     channel: str | None = None
     language: str | None = None
-    transcript: list[Message]
+    transcript: list[Any]
     audio_url: str | None = None
+
+    @field_validator("conversation_id", "channel", "language", "audio_url", mode="before")
+    @classmethod
+    def to_str(cls, v: Any) -> Any:
+        if v is None or isinstance(v, str):
+            return v.strip() if isinstance(v, str) else v
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return str(v)
+        return None
+
+    @field_validator("transcript", mode="after")
+    @classmethod
+    def normalize(cls, v: list[Any]) -> list[dict[str, Any]]:
+        return normalize_transcript(v)
 
 
 class ImportRequest(BaseModel):
@@ -32,3 +45,4 @@ class ImportResult(BaseModel):
     imported: int
     skipped: int
     errors: list[str] = []
+    warnings: list[str] = []

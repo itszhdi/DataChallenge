@@ -16,6 +16,7 @@ from src.features.evaluation.exceptions import (
     EvaluationNotFound,
     LLMUnavailable,
     NoActiveChecklist,
+    NotEvaluable,
 )
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
@@ -28,6 +29,15 @@ logger = logging.getLogger(__name__)
 def is_excluded(conversation: dict[str, Any]) -> bool:
     excluded = {c.strip().lower() for c in get_settings().exclude_channels}
     return (conversation.get("channel") or "").strip().lower() in excluded
+
+
+def check_evaluable(conversation: dict[str, Any]) -> None:
+    # ** Пустой диалог или диалог без оператора не отправляем в модель: оценивать нечего
+    transcript = conversation.get("transcript") or []
+    if not transcript:
+        raise NotEvaluable("пустой транскрипт")
+    if not any(m.get("speaker") == "operator" and (m.get("text") or "").strip() for m in transcript):
+        raise NotEvaluable("в диалоге нет реплик оператора")
 
 
 def validate_answers(
@@ -119,6 +129,8 @@ async def evaluate_conversation(llm: LLMClient, conversation_id: str) -> int:
     if is_excluded(conversation):
         logger.info("Conversation %s skipped: excluded channel %s", conversation_id, conversation["channel"])
         raise ChannelExcluded(conversation["channel"])
+    check_evaluable(conversation)
+    conversation_id = conversation["id"]
     checklist = await asyncio.to_thread(db.get_active_checklist)
     if not checklist:
         raise NoActiveChecklist()
@@ -212,6 +224,7 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
         conversation = await asyncio.to_thread(db.get_conversation, old["conversation_id"])
         if is_excluded(conversation):
             raise ChannelExcluded(conversation["channel"])
+        check_evaluable(conversation)
         criteria = select_criteria(active["data"], needs)
         new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)
         answers.update(new_answers)
@@ -229,7 +242,10 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
 
 
 async def reapply_conversation(llm: LLMClient, conversation_id: str) -> int:
-    evaluation_id = await asyncio.to_thread(db.latest_evaluation_id, conversation_id)
+    conversation = await asyncio.to_thread(db.get_conversation, conversation_id)
+    if not conversation:
+        raise ConversationNotFound(conversation_id)
+    evaluation_id = await asyncio.to_thread(db.latest_evaluation_id, conversation["id"])
     if not evaluation_id:
         raise NothingToReapply("у диалога нет оценки")
     return (await reapply(llm, evaluation_id))["evaluation_id"]
@@ -257,7 +273,7 @@ async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[
         try:
             evaluation_id = await action(llm, cid)
             job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
-        except (ChannelExcluded, NothingToReapply) as e:
+        except (ChannelExcluded, NotEvaluable, NothingToReapply) as e:
             job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e)})
         except HTTPException as e:
             job["failed"].append({"conversation_id": cid, "reason": e.detail})
@@ -280,7 +296,7 @@ def resolve_batch_ids(conversation_ids: list[str] | None, dataset: str | None, o
     items = db.list_conversations(dataset)
     if conversation_ids is not None:
         wanted = set(conversation_ids)
-        items = [i for i in items if i["id"] in wanted]
+        items = [i for i in items if i["id"] in wanted or i["source_id"] in wanted]
     if only_missing:
         items = [i for i in items if not i["last_evaluation_id"]]
     return [i["id"] for i in items]

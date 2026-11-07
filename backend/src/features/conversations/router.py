@@ -20,6 +20,6 @@ async def get_conversation(conversation_id: str) -> dict:
     if not conv:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Диалог не найден")
     conv["transcript"] = with_offsets(conv["transcript"])
-    evaluations = await asyncio.to_thread(db.list_evaluations, conversation_id)
+    evaluations = await asyncio.to_thread(db.list_evaluations, conv["id"])
     conv["evaluations"] = [{k: e[k] for k in ("id", "checklist_id", "parent_id", "created_at", "meta")} for e in evaluations]
     return conv

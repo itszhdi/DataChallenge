@@ -41,3 +41,14 @@ def test_gemini_schema_strips_unsupported():
     assert "enum" not in out["properties"]["v"] and "0, 5, 10" in out["properties"]["v"]["description"]
     assert out["properties"]["f"]["enum"] == ["insult"]
     assert extract_json('```json\n{"a": 1}\n```') == {"a": 1}
+
+
+def test_normalize_message_attachments_and_garbage():
+    from src.features.datasets.utils import normalize_message
+
+    m = normalize_message({"timestamp": 75, "speaker": "Agent", "text": None, "attachments": [{"type": "image", "name": "check.jpg"}]})
+    assert m["speaker"] == "operator" and m["timestamp"] == "01:15"
+    assert m["text"] == "[вложение: attachments: image check.jpg]" and m["attachments"]
+    odd = normalize_message({"speaker": "supervisor", "text": {"url": "https://x/y.pdf"}})
+    assert odd["speaker"] == "unknown" and odd["speaker_raw"] == "supervisor" and "y.pdf" in odd["text"]
+    assert normalize_message("просто строка")["text"] == "просто строка"
