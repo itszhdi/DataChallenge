@@ -6,9 +6,11 @@ import httpx
 import pytest
 
 from src.config.settings import get_settings
-from src.llm.client import LLMClient
+from src.features.evaluation.service import resolve_batch_ids
+from src.llm.client import LLMClient, LLMError
 from src.llm.prompts import PROMPT_VERSION
 from src.main import app
+
 
 SAMPLE = Path(__file__).parent / "sample_data.json"
 
