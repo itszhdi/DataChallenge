@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CQA · Freedom Broker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<!-- Корневой контейнер: всё приложение живёт в #cqa-root (удобно оформить как HTML-компонент Dynamics 365) -->
+<div id="cqa-root" class="cqa">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>
+      <div><b>freedom</b><small>CQA · контроль качества диалогов</small></div></div>
+    <nav id="nav" class="nav"></nav>
+    <div class="topbar-side"><span class="pill" id="cl-pill"></span></div>
+  </header>
+  <main id="view" class="view"></main>
+  <div id="modal-host"></div>
+  <div id="toast" class="toast" role="status"></div>
+</div>
+<script src="js/scoring.js"></script>
+<script src="js/checklist-default.js"></script>
+<script src="js/demo-data.js"></script>
+<script src="js/evaluator.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
