@@ -7,7 +7,8 @@
 
   let S;
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
-  if (!S) S = { records: [], checklists: [clone(window.DEFAULT_CHECKLIST)], activeCl: 'cl-default', results: {}, appeals: [], endpoint: '', apiUrl: '', exportMeta: { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' }, ui: { view: 'dialogs' } };
+  if (!S) S = { records: [], checklists: [clone(window.DEFAULT_CHECKLIST)], activeCl: 'cl-default', results: {}, appeals: [], endpoint: '', apiUrl: '', backendUrl: 'http://localhost:8000/api', dataset: 'DEV', exportMeta: { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' }, ui: { view: 'dialogs' } };
+  S.backendUrl = S.backendUrl || 'http://localhost:8000/api'; S.dataset = S.dataset || 'DEV';
   S.exportMeta = S.exportMeta || { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' };
   S.ui = S.ui || { view: 'dialogs' };
   let draft = null;
@@ -54,6 +55,8 @@
       <td><button class="btn sm" data-act="evalone" data-id="${esc(r.conversation_id)}">Оценить</button></td></tr>`;
     }).join('');
     return `<div class="panel"><h2>Источник данных</h2><div class="row">
+      <input id="backend-url" style="width:220px" value="${esc(S.backendUrl)}" placeholder="http://localhost:8000/api"><input id="backend-dataset" style="width:130px" value="${esc(S.dataset)}" placeholder="DEV"><button class="btn primary" data-act="backend-load">Загрузить из бэкенда</button>
+      <span class="small">Загрузит dataset в API бэкенда из его DATASET_API_URL и откроет диалоги.</span></div><div class="row" style="margin-top:10px">
       <input id="api-url" style="flex:1;min-width:260px" placeholder="URL GET (DEV или контрольный group_id)" value="${esc(S.apiUrl)}">
       <button class="btn primary" data-act="loadurl">Загрузить по URL</button>
       <label class="btn" style="margin:0;text-transform:none;letter-spacing:0;color:inherit">Файл JSON<input type="file" id="file-in" accept=".json" hidden></label>
@@ -69,6 +72,17 @@
 
   async function evaluate(id) {
     const r = rec(id), cl = clone(activeCl()), old = S.results[id];
+    if (S.dataSource === 'backend') {
+      const card = await api(`/evaluate`, { method: 'POST', body: JSON.stringify({ conversation_id: id }) });
+      const rawCl = await api('/checklists/active');
+      const data = rawCl.data;
+      const mappedCl = { id: String(rawCl.id), name: rawCl.name || data.name, version: rawCl.version, criteria: data.criteria.map((c) => ({ id: c.id, section: c.section, title: c.title, type: c.type === 'binary' ? 'yesno' : c.type, weight: c.weight, na: c.na_allowed, naRule: c.na_condition, steps: (c.scale || []).map((s) => ({ v: s.value, label: s.description })) })) };
+      S.checklists = [mappedCl]; S.activeCl = mappedCl.id;
+      const items = {};
+      (card.final.items || []).forEach((it) => { const a = it.answer; items[it.id] = { answer: a === 'na' ? 'na' : it.type === 'scale' ? it.value : a, explanation: it.explanation || '', evidence: (it.evidence_ids || []).map((n) => n - 1), checked: it.checked_range || '' }; });
+      S.results[id] = { clId: mappedCl.id, clVersion: mappedCl.version, checklist: mappedCl, items, at: card.evaluation.created_at, backendEvaluationId: card.evaluation.id };
+      save(); return;
+    }
     const items = await Evaluator.run(r, cl, S.endpoint);
     const sig = (c) => JSON.stringify([c.type, c.weight, c.rule, c.steps]);
     if (old) cl.criteria.forEach((c) => { // сохраняем решения проверяющего для неизменённых критериев
@@ -77,6 +91,27 @@
     });
     S.results[id] = { clId: cl.id, clVersion: cl.version, checklist: cl, items, at: new Date().toISOString() };
     save();
+  }
+
+  async function api(path, options = {}) {
+    const response = await fetch(`${S.backendUrl.replace(/\/$/, '')}${path}`, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+    return body;
+  }
+
+  async function loadBackend() {
+    S.backendUrl = $('#backend-url').value.trim().replace(/\/$/, ''); S.dataset = $('#backend-dataset').value.trim();
+    if (!S.backendUrl || !S.dataset) return toast('Укажите адрес API и название набора');
+    toast('Импортирую набор и загружаю диалоги…');
+    try {
+      await api('/datasets/import', { method: 'POST', body: JSON.stringify({ group_id: S.dataset }) });
+      const list = await api(`/conversations?dataset=${encodeURIComponent(S.dataset)}`);
+      const records = await Promise.all(list.map((x) => api(`/conversations/${encodeURIComponent(x.id)}`)));
+      S.records = records.map((x) => ({ conversation_id: x.conversation_id, channel: x.channel || 'chat', language: x.language || '', transcript: x.transcript || [], audio_url: x.audio_url || null }));
+      S.results = {}; S.appeals = []; S.dataSource = 'backend'; S.ui.cardId = null; indexRecords(); save();
+      toast(`Загружено диалогов: ${S.records.length}`); render();
+    } catch (err) { toast(`Ошибка бэкенда: ${err.message}`); }
   }
   async function evaluateMany(ids) {
     toast('Идёт оценка…');
@@ -290,7 +325,7 @@
   function loadRecords(json) {
     const recs = Array.isArray(json) ? json : json && json.data && json.data.records;
     if (!recs || !recs.length) throw new Error('В ответе нет data.records');
-    S.records = recs; S.results = {}; S.appeals = []; S.ui.cardId = null; S.audioShift = {}; indexRecords();
+    S.records = recs; S.results = {}; S.appeals = []; S.dataSource = 'local'; S.ui.cardId = null; S.audioShift = {}; indexRecords();
   }
 
   /* ---------- события ---------- */
@@ -310,6 +345,7 @@
     if (a === 'evalone') { e.stopPropagation(); await evaluateMany([id]); return; }
     if (a === 'evalall') return evaluateMany(S.records.map((r) => r.conversation_id));
     if (a === 'export-results') return exportResults();
+    if (a === 'backend-load') return loadBackend();
     if (a === 'jump') return jump(+t.dataset.i);
     if (a === 'seek') { const p = $('#player'), r = rec(S.ui.cardId); if (p && r) { S.ui.lastSeek = +t.dataset.i; p.currentTime = Math.max(0, offsetSec(r, +t.dataset.i) + shiftOf(r.conversation_id)); p.play().catch(() => {}); } return jump(+t.dataset.i); }
     if (a === 'syncpos') { const p = $('#player'), r = rec(S.ui.cardId), i = S.ui.lastSeek; if (!p || !r || i === undefined) return toast('Сначала нажмите ▶ у реплики'); S.audioShift = S.audioShift || {}; S.audioShift[r.conversation_id] = Math.round((p.currentTime - offsetSec(r, i)) * 10) / 10; $('#shift').value = S.audioShift[r.conversation_id]; save(); return toast('Сдвиг сохранён: ' + S.audioShift[r.conversation_id] + ' с'); }
@@ -346,6 +382,8 @@
   document.addEventListener('input', (e) => {
     const f = e.target.dataset;
     if (e.target.id === 'endpoint') { S.endpoint = e.target.value.trim(); return save(); }
+    if (e.target.id === 'backend-url') { S.backendUrl = e.target.value.trim(); return save(); }
+    if (e.target.id === 'backend-dataset') { S.dataset = e.target.value.trim(); return save(); }
     if (e.target.id === 'export-team') { S.exportMeta.teamName = e.target.value; return save(); }
     if (e.target.id === 'export-mode') { S.exportMeta.modelMode = e.target.value; return save(); }
     if (e.target.id === 'export-model') { S.exportMeta.modelName = e.target.value; return save(); }

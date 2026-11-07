@@ -12,7 +12,6 @@ dependencies = [
     "pydantic-settings>=2.16.2",
     "python-multipart>=0.0.33",
     "uvicorn[standard]>=0.54.0",
-    "uvloop>=0.23.0",
 ]
 
 [dependency-groups]

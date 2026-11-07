@@ -6,7 +6,7 @@ install:
 	uv sync
 
 run:
-	uv run uvicorn src.main:app --reload --port $(PORT) --loop uvloop --http httptools
+	uv run uvicorn src.main:app --reload --port $(PORT) --loop asyncio --http httptools
 
 test:
 	uv run pytest -q
