@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from src import db
 from src.dependencies import LLMDep
@@ -20,12 +20,9 @@ async def evaluate(body: EvaluateRequest, llm: LLMDep) -> dict:
 
 @router.post("/evaluate/batch", status_code=status.HTTP_202_ACCEPTED)
 async def evaluate_batch(body: BatchRequest, llm: LLMDep) -> dict:
-    if body.mode == "reapply":
-        # TODO этап 3: пакетное применение нового чек-листа
-        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "mode=reapply появится на этапе 3")
     ids = await asyncio.to_thread(service.resolve_batch_ids, body.conversation_ids, body.dataset, body.only_missing)
     job = jobs.create_job(body.mode, len(ids))
-    jobs.spawn(service.run_batch(llm, job, ids))
+    jobs.spawn(service.run_batch(llm, job, ids, body.mode))
     return job
 
 
@@ -40,6 +37,14 @@ async def get_job(job_id: str) -> dict:
 @router.get("/evaluations/{evaluation_id}")
 async def get_evaluation(evaluation_id: int) -> dict:
     return await asyncio.to_thread(service.build_card, evaluation_id)
+
+
+@router.post("/evaluations/{evaluation_id}/reapply")
+async def reapply(evaluation_id: int, llm: LLMDep) -> dict:
+    result = await service.reapply(llm, evaluation_id)
+    card = await asyncio.to_thread(service.build_card, result["evaluation_id"])
+    card["reapply"] = result
+    return card
 
 
 @router.get("/prompt/{conversation_id}")

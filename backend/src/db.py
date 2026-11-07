@@ -284,3 +284,24 @@ def resolve_appeal(appeal_id: int, decision: str, reason: str, new_answer: dict[
             (decision, reason, _dump(new_answer) if new_answer is not None else None, _now(), appeal_id),
         )
         return _row(conn.execute("SELECT * FROM appeals WHERE id = ?", (appeal_id,)).fetchone())
+
+
+def latest_evaluation_id(conversation_id: str) -> int | None:
+    with connect() as conn:
+        row = conn.execute("SELECT MAX(id) FROM evaluations WHERE conversation_id = ?", (conversation_id,)).fetchone()
+        return row[0]
+
+
+def copy_resolved_appeals(from_evaluation_id: int, to_evaluation_id: int, criteria_ids: list[str]) -> int:
+    # * При переносе оценки на новый чек-лист решения по апелляциям для неизменных критериев сохраняются
+    if not criteria_ids:
+        return 0
+    marks = ",".join("?" * len(criteria_ids))
+    with connect() as conn:
+        cur = conn.execute(
+            f"""INSERT INTO appeals (evaluation_id, criterion_id, comment, status, decision, new_answer, reason, created_at, resolved_at)
+                SELECT ?, criterion_id, comment, status, decision, new_answer, reason, created_at, resolved_at
+                FROM appeals WHERE evaluation_id = ? AND status = 'resolved' AND criterion_id IN ({marks}) ORDER BY id""",
+            (to_evaluation_id, from_evaluation_id, *criteria_ids),
+        )
+        return cur.rowcount

@@ -1,0 +1,14 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DB_PATH: /app/data/cqa.sqlite3
+    ports:
+      - "8000:8000"
+    volumes:
+      - cqa-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  cqa-data:

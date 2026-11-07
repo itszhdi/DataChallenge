@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from src import db
 from src.config.settings import get_settings
+from src.features.checklists.service import diff_checklists
 from src.features.evaluation import jobs
 from src.features.evaluation.exceptions import (
     ChannelExcluded,
@@ -176,14 +177,81 @@ def list_conversations_with_scores(dataset: str | None = None) -> list[dict[str,
     return items
 
 
-async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[str]) -> None:
+class NothingToReapply(Exception):
+    pass
+
+
+async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
+    # * Переносит оценку на активный чек-лист: неизменные ответы копируются, модель спрашивается только по изменённым/новым
+    old = await asyncio.to_thread(db.get_evaluation, evaluation_id)
+    if not old:
+        raise EvaluationNotFound(evaluation_id)
+    active = await asyncio.to_thread(db.get_active_checklist)
+    if not active:
+        raise NoActiveChecklist()
+    if old["checklist_id"] == active["id"]:
+        return {"evaluation_id": evaluation_id, "parent_id": None, "unchanged": True, "llm_called": False}
+
+    old_checklist = await asyncio.to_thread(db.get_checklist, old["checklist_id"])
+    diff = diff_checklists(old_checklist["data"], active["data"])
+    copied = [cid for cid in diff["same"] + diff["weight_only"] if old["answers"].get(cid, {}).get("status") == "ok"]
+    # ** Критерии, по которым раньше не было ответа, тоже переспрашиваем
+    needs = [c["id"] for c in active["data"]["criteria"] if c["id"] not in copied]
+    answers = {cid: old["answers"][cid] for cid in copied}
+    old_warnings = [w for w in old["meta"].get("warnings", []) if w.split(":")[0] in copied]
+    meta: dict[str, Any] = {"reapplied_from": evaluation_id, "copied": copied, "evaluated_criteria": needs, "diff": diff, "llm": None}
+
+    if needs:
+        conversation = await asyncio.to_thread(db.get_conversation, old["conversation_id"])
+        if is_excluded(conversation):
+            raise ChannelExcluded(conversation["channel"])
+        criteria = select_criteria(active["data"], needs)
+        new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)
+        answers.update(new_answers)
+        meta["llm"] = {k: v for k, v in llm_meta.items() if k not in ("warnings", "evaluated_criteria")}
+        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd") if k in llm_meta})
+        old_warnings += llm_meta["warnings"]
+    meta["warnings"] = old_warnings
+
+    new_id = await asyncio.to_thread(db.insert_evaluation, old["conversation_id"], active["id"], answers, meta, evaluation_id)
+    await asyncio.to_thread(db.copy_resolved_appeals, evaluation_id, new_id, copied)
+    logger.info(
+        "Evaluation %s reapplied as %s: copied=%d llm_criteria=%s", evaluation_id, new_id, len(copied), needs or "none",
+    )
+    return {"evaluation_id": new_id, "parent_id": evaluation_id, "unchanged": False, "llm_called": bool(needs), "diff": diff}
+
+
+async def reapply_conversation(llm: LLMClient, conversation_id: str) -> int:
+    evaluation_id = await asyncio.to_thread(db.latest_evaluation_id, conversation_id)
+    if not evaluation_id:
+        raise NothingToReapply("у диалога нет оценки")
+    return (await reapply(llm, evaluation_id))["evaluation_id"]
+
+
+async def reapply_many(llm: LLMClient, dataset: str | None) -> dict[str, Any]:
+    # * Синхронный пересчёт всех последних оценок (используется при смене весов — без вызова модели)
+    latest = await asyncio.to_thread(db.latest_evaluations, dataset)
+    done, failed = 0, []
+    for e in latest:
+        try:
+            await reapply(llm, e["id"])
+            done += 1
+        except HTTPException as ex:
+            failed.append({"conversation_id": e["conversation_id"], "reason": ex.detail})
+    logger.info("Reapplied %d evaluations, failed=%d", done, len(failed))
+    return {"total": len(latest), "done": done, "failed": failed}
+
+
+async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
     # ** Параллелизм ограничивает сам LLM-клиент (LLM_CONCURRENCY + троттлинг), здесь просто запускаем всё
+    action = evaluate_conversation if mode == "evaluate" else reapply_conversation
+
     async def one(cid: str) -> None:
         try:
-            evaluation_id = await evaluate_conversation(llm, cid)
+            evaluation_id = await action(llm, cid)
             job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
-        except ChannelExcluded as e:
-            job["skipped"].append({"conversation_id": cid, "reason": e.detail})
+        except (ChannelExcluded, NothingToReapply) as e:
+            job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e)})
         except HTTPException as e:
             job["failed"].append({"conversation_id": cid, "reason": e.detail})
         except Exception as e:
@@ -192,7 +260,7 @@ async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[
         finally:
             job["processed"] += 1
 
-    logger.info("Batch job %s started: %d conversations", job["id"], len(conversation_ids))
+    logger.info("Batch job %s (%s) started: %d conversations", job["id"], mode, len(conversation_ids))
     await asyncio.gather(*(one(cid) for cid in conversation_ids))
     jobs.finish(job)
     logger.info(
