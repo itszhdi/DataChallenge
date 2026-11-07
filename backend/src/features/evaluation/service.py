@@ -21,6 +21,8 @@ from src.features.evaluation.exceptions import (
 )
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
+from src.features.settings.service import load as load_app_settings
+from src.features.transcription.service import prepare_transcript
 from src.llm.client import LLMClient, LLMError, LLMRegistry
 from src.llm.prompts import build_messages, build_schema, ground_answers, select_criteria
 
@@ -130,6 +132,10 @@ async def evaluate_conversation(llm: LLMClient, conversation_id: str) -> int:
     if is_excluded(conversation):
         logger.info("Conversation %s skipped: excluded channel %s", conversation_id, conversation["channel"])
         raise ChannelExcluded(conversation["channel"])
+    # ** Для звонков с записью — свой транскрипт из аудио (по настройке call_transcript)
+    call_transcript = (await asyncio.to_thread(load_app_settings)).call_transcript
+    transcript, source = await prepare_transcript(conversation, call_transcript)
+    conversation = {**conversation, "transcript": transcript}
     check_evaluable(conversation)
     conversation_id = conversation["id"]
     checklist = await asyncio.to_thread(db.get_active_checklist)
@@ -141,11 +147,19 @@ async def evaluate_conversation(llm: LLMClient, conversation_id: str) -> int:
     answers, meta = await run_llm(llm, checklist["data"], conversation, select_criteria(checklist["data"]))
     meta["total_seconds"] = round(time.monotonic() - started, 2)
     meta["previous_evaluation_id"] = previous_id
+    meta["transcript_source"] = source
+    if source == "asr":
+        # ! Снимок транскрипта: номера #N в ответах модели должны совпадать с карточкой даже после повторного распознавания
+        meta["transcript"] = transcript
     evaluation_id = await asyncio.to_thread(db.insert_evaluation, conversation_id, checklist["id"], answers, meta)
     if previous_id:
         await asyncio.to_thread(carry_appeals, previous_id, evaluation_id, checklist["data"])
     logger.info("Conversation %s evaluated: evaluation_id=%s checklist_id=%s", conversation_id, evaluation_id, checklist["id"])
     return evaluation_id
+
+
+def evaluated_transcript(evaluation: dict[str, Any], conversation: dict[str, Any]) -> list[dict[str, Any]]:
+    return evaluation["meta"].get("transcript") or conversation["transcript"]
 
 
 def carry_appeals(from_id: int, to_id: int, active: dict[str, Any], diff: dict[str, Any] | None = None) -> dict[str, int]:
@@ -173,7 +187,10 @@ def build_card(evaluation_id: int) -> dict[str, Any]:
     for score in (original, final):
         score["warnings"] = meta.get("warnings", []) + score["warnings"]
 
-    conversation["transcript"] = with_offsets(conversation["transcript"])
+    conversation["transcript"] = with_offsets(evaluated_transcript(evaluation, conversation))
+    conversation["transcript_source"] = meta.get("transcript_source", "original")
+    conversation.pop("transcript_asr", None)
+    meta = {k: v for k, v in meta.items() if k != "transcript"}
     return {
         "evaluation": {k: evaluation[k] for k in ("id", "conversation_id", "checklist_id", "parent_id", "created_at")},
         "checklist": {"id": checklist["id"], "version": checklist["version"], "name": checklist["name"], "is_active": checklist["is_active"]},
@@ -236,12 +253,17 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
     needs = [c["id"] for c in active["data"]["criteria"] if c["id"] not in copied]
     answers = {cid: old["answers"][cid] for cid in copied}
     old_warnings = [w for w in old["meta"].get("warnings", []) if w.split(":")[0] in copied]
-    meta: dict[str, Any] = {"reapplied_from": evaluation_id, "copied": copied, "evaluated_criteria": needs, "diff": diff, "llm": None}
+    meta: dict[str, Any] = {
+        "transcript_source": old["meta"].get("transcript_source", "original"),
+        **({"transcript": old["meta"]["transcript"]} if old["meta"].get("transcript") else {}),
+        "reapplied_from": evaluation_id, "copied": copied, "evaluated_criteria": needs, "diff": diff, "llm": None}
 
     if needs:
         conversation = await asyncio.to_thread(db.get_conversation, old["conversation_id"])
         if is_excluded(conversation):
             raise ChannelExcluded(conversation["channel"])
+        # ** Переоценка идёт по тому же транскрипту, что и исходная оценка
+        conversation = {**conversation, "transcript": evaluated_transcript(old, conversation)}
         check_evaluable(conversation)
         criteria = select_criteria(active["data"], needs)
         new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)

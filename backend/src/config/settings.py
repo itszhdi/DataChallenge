@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +20,10 @@ class LLMProfile:
     concurrency: int
     retries: int
     timeout_sec: float
+    # * 0 — без ограничения длины ответа
+    max_tokens: int = 0
+    # * Повторять ли запрос после таймаута (локальной модели повтор почти никогда не помогает)
+    retry_on_timeout: bool = True
 
 
 class Settings(BaseSettings):
@@ -29,6 +33,8 @@ class Settings(BaseSettings):
     dataset_api_url: str = ""
     db_path: Path = BASE_DIR / "cqa.sqlite3"
     default_checklist_path: Path = BASE_DIR / "checklists" / "default_checklist.json"
+    # * Куда сохраняются выгрузки результатов (POST /api/export/save)
+    results_dir: Path = BASE_DIR.parent / "results"
     cors_origins: list[str] = ["*"]
     log_level: str = "INFO"
 
@@ -47,7 +53,9 @@ class Settings(BaseSettings):
     local_llm_base_url: str = "http://localhost:1234/v1"
     local_llm_api_key: str = "lm-studio"
     local_llm_model: str = ""
-    local_llm_reasoning_effort: str = ""
+    # ! Qwen3.5 по умолчанию «размышляет» тысячами токенов до JSON; LM Studio отключает это только через reasoning_effort=none
+    local_llm_reasoning_effort: str = "none"
+    local_llm_max_tokens: int = 3000
     local_llm_min_interval_sec: float = 0.0
     local_llm_concurrency: int = 1
     local_llm_retries: int = 2
@@ -56,8 +64,14 @@ class Settings(BaseSettings):
     default_llm_profile: str = "gemini"
     worker_interval_sec: float = 5.0
 
-    # ! На бесплатном тарифе Google использует запросы для обучения — реальные звонки не отправляем
-    exclude_channels: list[str] = ["voice call"]
+    # * Каналы, которые не отправляются в модель (по умолчанию все разрешены: данные банка можно использовать)
+    exclude_channels: list[str] = []
+
+    # * Распознавание звонков через Gemini (аудио → транскрипт с ролями); ключ и адрес — из LLM_*
+    transcribe_model: str = "gemini-3.8-flash"
+    transcribe_reasoning_effort: str = "low"
+    transcribe_timeout_sec: float = 600.0
+    transcribe_max_audio_mb: float = 20.0
 
     # $ за 1M токенов: {"model": [input, output]}; бесплатный тариф = 0
     llm_prices: dict[str, list[float]] = Field(default_factory=dict)
@@ -81,9 +95,17 @@ class Settings(BaseSettings):
             "local": LLMProfile(
                 "local", "openai", self.local_llm_api_key, self.local_llm_base_url, self.local_llm_model,
                 self.local_llm_reasoning_effort, self.local_llm_min_interval_sec, self.local_llm_concurrency,
-                self.local_llm_retries, self.local_llm_timeout_sec,
+                self.local_llm_retries, self.local_llm_timeout_sec, self.local_llm_max_tokens, False,
             ),
         }
+
+
+    def transcribe_profile(self) -> LLMProfile:
+        gemini = self.llm_profiles()["gemini"]
+        return replace(
+            gemini, name="transcribe", provider="gemini", model=self.transcribe_model,
+            reasoning_effort=self.transcribe_reasoning_effort, timeout_sec=self.transcribe_timeout_sec, retries=1,
+        )
 
 
 @lru_cache

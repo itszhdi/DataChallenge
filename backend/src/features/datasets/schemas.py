@@ -10,7 +10,8 @@ class Record(BaseModel):
     conversation_id: str = Field(min_length=1)
     channel: str | None = None
     language: str | None = None
-    transcript: list[Any]
+    # * У новых звонков транскрипта может не быть — тогда он будет распознан из audio_url
+    transcript: list[Any] = []
     audio_url: str | None = None
 
     @field_validator("conversation_id", "channel", "language", "audio_url", mode="before")
@@ -21,6 +22,11 @@ class Record(BaseModel):
         if isinstance(v, (int, float)) and not isinstance(v, bool):
             return str(v)
         return None
+
+    @field_validator("transcript", mode="before")
+    @classmethod
+    def none_to_empty(cls, v: Any) -> Any:
+        return [] if v is None else v
 
     @field_validator("transcript", mode="after")
     @classmethod

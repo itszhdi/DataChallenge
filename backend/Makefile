@@ -1,4 +1,4 @@
-.PHONY: install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker analytics clean-db docker-build docker-up docker-down docker-logs
+.PHONY: install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker save-results transcribe analytics clean-db docker-build docker-up docker-down docker-logs
 
 PORT ?= 8000
 
@@ -62,15 +62,23 @@ use-gemini:
 use-local:
 	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"local"}'
 
-# * SORT: date_asc | date_desc | size_asc | size_desc
+# * SORT: date_asc | date_desc | size_asc | size_desc; CALLS: mixed | first | last
 auto-on:
-	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":true,"auto_sort":"$(or $(SORT),date_asc)"}'
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":true,"auto_sort":"$(or $(SORT),date_asc)","auto_calls":"$(or $(CALLS),mixed)"}'
 
 auto-off:
 	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"auto_mode":false}'
 
 worker:
 	@curl -s localhost:$(PORT)/api/worker
+
+# * Сохраняет результаты набора в results/<DATASET>_<время>.json и <DATASET>_latest.json
+save-results:
+	@curl -s -X POST "localhost:$(PORT)/api/export/save?dataset=$(or $(DATASET),DEV)&team_name=$(TEAM)"
+
+# * Заново распознать запись звонка: make transcribe ID=DEV:p4-ru-002
+transcribe:
+	@curl -s -X POST "localhost:$(PORT)/api/conversations/$(ID)/transcribe"
 
 clean-db:
 	rm -f cqa.sqlite3 cqa.sqlite3-wal cqa.sqlite3-shm

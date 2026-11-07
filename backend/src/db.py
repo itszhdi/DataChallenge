@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     language TEXT,
     audio_url TEXT,
     transcript TEXT NOT NULL,
+    transcript_asr TEXT,
+    asr_meta TEXT,
     imported_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_conversations_dataset ON conversations(dataset);
@@ -81,7 +83,7 @@ CREATE TABLE IF NOT EXISTS analysis_status (
 CREATE INDEX IF NOT EXISTS ix_analysis_status_state ON analysis_status(state);
 """
 
-JSON_FIELDS = {"transcript", "data", "answers", "meta", "new_answer"}
+JSON_FIELDS = {"transcript", "transcript_asr", "asr_meta", "data", "answers", "meta", "new_answer"}
 # ! Меняется при несовместимом изменении схемы: старую БД нужно пересоздать (make clean-db)
 SCHEMA_VERSION = 2
 
@@ -137,6 +139,12 @@ def init_db() -> None:
             logger.error("Database schema v%s is outdated (need v%s), run `make clean-db` and re-import", version, SCHEMA_VERSION)
             raise SchemaOutdated(f"{path}: schema v{version} < v{SCHEMA_VERSION}, run `make clean-db`")
         conn.executescript(SCHEMA)
+        # * Лёгкая миграция v2: колонки своего транскрипта звонка добавляются без пересоздания БД
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(conversations)").fetchall()}
+        for col in ("transcript_asr", "asr_meta"):
+            if col not in columns:
+                conn.execute(f"ALTER TABLE conversations ADD COLUMN {col} TEXT")
+                logger.info("Database migrated: conversations.%s added", col)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     logger.info("Database ready at %s", path)
 
@@ -184,6 +192,7 @@ def list_conversations(dataset: str | None = None) -> list[dict[str, Any]]:
     # * Список без транскрипта + id последней оценки и число открытых апелляций по ней
     sql = """
         SELECT c.id, c.source_id, c.dataset, c.seq, c.channel, c.language, c.audio_url, c.imported_at, json_array_length(c.transcript) AS messages,
+               json_array_length(c.transcript_asr) AS asr_messages,
                (SELECT e.id FROM evaluations e WHERE e.conversation_id = c.id ORDER BY e.id DESC LIMIT 1) AS last_evaluation_id,
                s.state AS status, s.source AS status_source, s.error AS status_error, s.attempts AS status_attempts,
                s.queued_at AS status_queued_at, s.started_at AS status_started_at, s.finished_at AS status_finished_at
@@ -469,13 +478,19 @@ AUTO_SORT_SQL = {
 }
 
 
-def auto_candidates(sort: str, dataset: str | None, excluded_channels: list[str], limit: int = 1) -> list[dict[str, Any]]:
+AUTO_CALLS_SQL = {"mixed": "", "first": "is_call DESC, ", "last": "is_call ASC, "}
+
+
+def auto_candidates(
+    sort: str, dataset: str | None, excluded_channels: list[str], limit: int = 1, calls: str = "mixed"
+) -> list[dict[str, Any]]:
     # ** Только диалоги без оценки и без статуса: упавшие/пропущенные воркер не трогает (повтор — вручную)
-    order = AUTO_SORT_SQL[sort]
+    order = AUTO_CALLS_SQL[calls] + AUTO_SORT_SQL[sort]
     excluded = [c.strip().lower() for c in excluded_channels]
     marks = ",".join("?" * len(excluded)) or "''"
     sql = f"""SELECT c.id AS conversation_id, c.id, c.source_id, c.dataset, c.seq, c.imported_at,
-                     json_array_length(c.transcript) AS messages
+                     json_array_length(c.transcript) AS messages,
+                     (COALESCE(c.audio_url, '') != '') AS is_call
               FROM conversations c LEFT JOIN analysis_status s ON s.conversation_id = c.id
               WHERE s.conversation_id IS NULL
                 AND NOT EXISTS (SELECT 1 FROM evaluations e WHERE e.conversation_id = c.id)
@@ -484,3 +499,11 @@ def auto_candidates(sort: str, dataset: str | None, excluded_channels: list[str]
     extra, params = ("AND c.dataset = ?", [*excluded, dataset]) if dataset else ("", list(excluded))
     with connect() as conn:
         return _rows(conn.execute(sql.format(extra=extra), [*params, limit]).fetchall())
+
+
+def set_transcript_asr(conversation_id: str, transcript: list[dict[str, Any]], meta: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE conversations SET transcript_asr = ?, asr_meta = ? WHERE id = ?",
+            (_dump(transcript), _dump(meta), conversation_id),
+        )

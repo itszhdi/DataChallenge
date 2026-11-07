@@ -21,6 +21,11 @@ class LLMError(Exception):
     pass
 
 
+def _is_daily_quota(e: openai.APIStatusError) -> bool:
+    # ! Дневной лимит (free tier: ~20 запросов/день на модель) паузами не лечится — сразу ошибка
+    return "PerDay" in json.dumps(e.body, ensure_ascii=False, default=str)
+
+
 def _error_text(e: openai.APIStatusError) -> str:
     # * У 429 str(e) — только код; причина (квота RPM/RPD, модель) лежит в теле ответа
     body = e.body
@@ -96,7 +101,7 @@ class LLMClient:
                 await asyncio.sleep(wait)
             self._last_call = time.monotonic()
 
-    def _request_kwargs(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> dict[str, Any]:
+    def _request_kwargs(self, messages: list[dict[str, Any]], schema: dict[str, Any]) -> dict[str, Any]:
         send_schema = gemini_schema(schema) if self.provider == "gemini" else schema
         kwargs: dict[str, Any] = {
             "model": self.model,
@@ -109,9 +114,11 @@ class LLMClient:
         }
         if self.profile.reasoning_effort:
             kwargs["reasoning_effort"] = self.profile.reasoning_effort
+        if self.profile.max_tokens:
+            kwargs["max_tokens"] = self.profile.max_tokens
         return kwargs
 
-    async def complete_json(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def complete_json(self, messages: list[dict[str, Any]], schema: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         if self.provider == "gemini" and not self.profile.api_key:
             raise LLMError("LLM_API_KEY не задан в .env")
         if not self.model:
@@ -129,6 +136,9 @@ class LLMClient:
                 try:
                     resp = await self.client.chat.completions.create(**kwargs)
                 except openai.RateLimitError as e:
+                    if _is_daily_quota(e):
+                        logger.error("LLM daily quota exhausted for model %s: %s", self.model, _error_text(e))
+                        raise LLMError(f"Дневная квота модели {self.model} исчерпана: {_error_text(e)[:200]}") from e
                     # ! 429 не тратит обычные попытки: ждём 15, 30, 45... с, максимум 5 раз
                     rate_limited += 1
                     attempts -= 1
@@ -141,7 +151,13 @@ class LLMClient:
                     )
                     await asyncio.sleep(pause)
                     continue
-                except (openai.APIConnectionError, openai.APITimeoutError, openai.InternalServerError) as e:
+                except openai.APITimeoutError as e:
+                    last_error = f"timeout after {self.profile.timeout_sec:.0f}s"
+                    logger.warning("LLM timeout on attempt %d (model=%s, %.0fs)", attempts, self.model, self.profile.timeout_sec)
+                    if not self.profile.retry_on_timeout:
+                        raise LLMError(f"Модель {self.model} не ответила за {self.profile.timeout_sec:.0f} с") from e
+                    continue
+                except (openai.APIConnectionError, openai.InternalServerError) as e:
                     last_error = f"{type(e).__name__}: {e}"
                     logger.warning("LLM network/server error on attempt %d: %s", attempts, last_error)
                     continue
@@ -156,6 +172,13 @@ class LLMClient:
                     usage["total_tokens"] += resp.usage.total_tokens or 0
 
                 content = resp.choices[0].message.content if resp.choices else None
+                if resp.choices and resp.choices[0].finish_reason == "length":
+                    # ! Ответ упёрся в max_tokens: при temperature=0 повтор даст то же самое — сразу ошибка
+                    logger.error(
+                        "LLM response truncated by max_tokens=%s (model=%s, tokens_out=%d)",
+                        self.profile.max_tokens or "default", self.model, usage["completion_tokens"],
+                    )
+                    raise LLMError(f"Ответ модели {self.model} обрезан по длине ({usage['completion_tokens']} токенов)")
                 try:
                     data = extract_json(content or "")
                 except ValueError as e:
@@ -197,6 +220,8 @@ class LLMRegistry:
     # ** Все профили создаются при старте; активный меняется из /api/settings без рестарта
     def __init__(self, settings: Settings, active: str | None = None) -> None:
         self.clients = {name: LLMClient(p, settings.llm_prices) for name, p in settings.llm_profiles().items()}
+        # * Отдельный клиент для распознавания звонков: модель Gemini с поддержкой аудио, не зависит от активного профиля
+        self.transcriber = LLMClient(settings.transcribe_profile(), settings.llm_prices)
         self.active_name = active if active in self.clients else settings.default_llm_profile
 
     def use(self, name: str) -> None:
@@ -210,5 +235,5 @@ class LLMRegistry:
         return self.clients[self.active_name]
 
     async def close(self) -> None:
-        for c in self.clients.values():
+        for c in [*self.clients.values(), self.transcriber]:
             await c.close()

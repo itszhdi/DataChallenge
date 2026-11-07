@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src import db
 from src.config.settings import Settings, get_settings
 from src.features.settings.service import load as load_app_settings
+from src.features.transcription.service import configure as configure_transcriber
 from src.features.worker.service import run as run_worker
 from src.llm.client import LLMRegistry
 from src.router import api_router
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[State]:
     stale = await asyncio.to_thread(db.reset_stale_statuses)
     app_settings = await asyncio.to_thread(load_app_settings)
     llm = LLMRegistry(settings, app_settings.llm_profile)
+    configure_transcriber(llm.transcriber)
     logger = logging.getLogger(__name__)
     logger.info("CQA started: profile=%s model=%s auto_mode=%s", llm.active_name, llm.active().model, app_settings.auto_mode)
     if stale:

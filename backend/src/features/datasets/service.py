@@ -50,7 +50,8 @@ def import_payload(payload: Any, dataset: str | None = None) -> ImportResult:
         if cid in valid:
             warnings.append(f"{cid}: повтор id в файле — оставлена последняя запись")
         if not tr:
-            warnings.append(f"{cid}: пустой транскрипт — оценка невозможна")
+            hint = "будет распознан из записи" if record.get("audio_url") else "оценка невозможна"
+            warnings.append(f"{cid}: пустой транскрипт — {hint}")
         notes = [
             (sum(1 for m in tr if m.get("attachments")), "вложений"),
             (sum(1 for m in tr if m["speaker"] == "unknown"), "реплик с неизвестной ролью"),

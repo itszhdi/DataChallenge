@@ -15,10 +15,19 @@ SAMPLE = Path(__file__).parent / "sample_data.json"
 async def client(tmp_path, monkeypatch):
     monkeypatch.setattr(get_settings(), "db_path", tmp_path / "test.sqlite3")
     monkeypatch.setattr(get_settings(), "worker_interval_sec", 0.01)
+    monkeypatch.setattr(get_settings(), "exclude_channels", ["voice call"])
+    monkeypatch.setattr(get_settings(), "results_dir", tmp_path / "results")
     calls: list[list[str]] = []
 
     async def fake_complete(self, messages, schema):
         calls.append(list(schema["properties"]))
+        if "segments" in schema["properties"]:
+            segments = [
+                {"start": "00:00", "speaker": "operator", "text": "Freedom Broker, good morning, my name is John."},
+                {"start": "00:06", "speaker": "client", "text": "Hi, what are the trading hours for US stocks?"},
+                {"start": "00:15", "speaker": "operator", "text": "From 19:30 to 02:00 Astana time. Anything else? Goodbye!"},
+            ]
+            return {"segments": segments}, {"provider": "fake", "model": "fake-asr", "tokens": {}, "cost_usd": 0}
         out = {}
         for cid, s in schema["properties"].items():
             p = s["properties"]
@@ -111,7 +120,17 @@ async def test_messy_import_and_id_collision(client):
     assert (await client.post("/api/evaluate", json={"conversation_id": "OTHER:s-ru-001"})).status_code == 200
     assert client.llm_calls
     export = (await client.get("/api/export", params={"dataset": "OTHER"})).json()
-    assert [r["conversation_id"] for r in export["results"]] == ["s-ru-001"]
+    assert {r["conversation_id"]: r["status"] for r in export["results"]} == {"s-ru-001": "ok", "empty-1": "skipped", "no-op": "skipped"}
+    assert export["counts"] == {"ok": 1, "skipped": 2}
+
+    # * Экспорт всех статусов в файл: звонок исключён, неоценённый KZ — pending
+    r = await client.get("/api/export", params={"dataset": "SAMPLE", "download": True})
+    assert r.headers["content-disposition"].startswith('attachment; filename="SAMPLE_') and len(r.json()["results"]) == 3
+    saved = (await client.post("/api/export/save", params={"dataset": "../x", "team_name": "t"})).json()
+    assert Path(saved["path"]).parent == get_settings().results_dir and saved["file"].startswith("x_")
+    saved = (await client.post("/api/export/save", params={"dataset": "SAMPLE", "team_name": "t"})).json()
+    data = json.loads(Path(saved["latest"]).read_text(encoding="utf-8"))
+    assert {r["conversation_id"]: r["status"] for r in data["results"]} == {"s-ru-001": "pending", "s-kz-002": "pending", "s-en-003": "excluded"}
 
 
 async def test_appeals_survive_reevaluation_and_threshold_change(client):
@@ -209,6 +228,14 @@ async def test_auto_worker_order_and_no_auto_retry(client, monkeypatch):
     queue = (await client.get("/api/queue")).json()
     assert queue["counts"]["upcoming"] == 0
 
+    # * Звонки сначала / в конце, сортировка внутри групп сохраняется (проверяем запрос кандидатов без гонки с воркером)
+    from src import db
+
+    order = lambda calls: [c["source_id"] for c in db.auto_candidates("size_asc", None, [], 10, calls)]  # noqa: E731
+    assert order("first") == ["s-en-003", "s-kz-002", "s-ru-001"]
+    assert order("last") == ["s-kz-002", "s-ru-001", "s-en-003"]
+    assert (await client.patch("/api/settings", json={"auto_calls": "sometimes"})).status_code == 422
+
     await client.patch("/api/settings", json={"auto_mode": True, "auto_sort": "size_asc"})
     queue = (await client.get("/api/queue")).json()
     # ** Звонок исключён, короткий KZ-чат первым
@@ -227,3 +254,29 @@ async def test_auto_worker_order_and_no_auto_retry(client, monkeypatch):
     assert worker["alive"] and worker["mode"] == "auto" and worker["status"] == "idle" and worker["failed"] == 1
 
     await client.patch("/api/settings", json={"auto_mode": False})
+
+
+async def test_call_transcribed_from_audio(client, monkeypatch):
+    from src.features.transcription import service as asr
+
+    async def fake_audio(url):
+        return b"ID3fake", "mp3"
+
+    monkeypatch.setattr(get_settings(), "exclude_channels", [])
+    monkeypatch.setattr(asr, "fetch_audio", fake_audio)
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+
+    # ** Звонок оценивается по своему транскрипту (call_transcript=asr по умолчанию), снимок хранится в оценке
+    card = (await client.post("/api/evaluate", json={"conversation_id": "s-en-003"})).json()
+    assert client.llm_calls[0] == ["segments"] and card["conversation"]["transcript_source"] == "asr"
+    assert [m["speaker"] for m in card["conversation"]["transcript"]] == ["operator", "client", "operator"]
+    assert card["conversation"]["transcript"][1]["timestamp"].startswith("2026-11-06T10:15:08")
+    conv = (await client.get("/api/conversations/s-en-003")).json()
+    assert conv["asr_meta"]["model"] == get_settings().transcribe_model and len(conv["transcript_asr"]) == 3
+
+    # * Повторная оценка не распознаёт заново; при original — оценка по транскрипту датасета
+    await client.post("/api/evaluate", json={"conversation_id": "s-en-003"})
+    assert sum(c == ["segments"] for c in client.llm_calls) == 1
+    await client.patch("/api/settings", json={"call_transcript": "original"})
+    card = (await client.post("/api/evaluate", json={"conversation_id": "s-en-003"})).json()
+    assert card["conversation"]["transcript_source"] == "original" and "transcript" not in card["meta"]

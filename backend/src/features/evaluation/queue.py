@@ -36,7 +36,9 @@ def build_queue(llm: LLMClient, dataset: str | None = None) -> dict[str, Any]:
     # ** ETA считается по всей очереди (порядок общий), а фильтр по набору применяется к ответу
     settings = load_settings()
     upcoming = (
-        db.auto_candidates(settings.auto_sort, settings.auto_dataset, get_settings().exclude_channels, UPCOMING_LIMIT)
+        db.auto_candidates(
+            settings.auto_sort, settings.auto_dataset, get_settings().exclude_channels, UPCOMING_LIMIT, settings.auto_calls
+        )
         if settings.auto_mode else []
     )
     avg = average_seconds(llm)
@@ -50,7 +52,8 @@ def build_queue(llm: LLMClient, dataset: str | None = None) -> dict[str, Any]:
     base = max((r["eta_sec"] for r in running), default=0.0)
     # * Очередь пакета, затем — кандидаты авто-воркера (они начнутся после пакета)
     waiting = queued + [
-        {k: u[k] for k in ("conversation_id", "source_id", "dataset", "messages", "imported_at")} | {"state": "upcoming", "source": "auto"}
+        {k: u[k] for k in ("conversation_id", "source_id", "dataset", "messages", "imported_at")}
+        | {"is_call": bool(u["is_call"]), "state": "upcoming", "source": "auto"}
         for u in upcoming
     ]
     for pos, q in enumerate(waiting):
@@ -63,7 +66,7 @@ def build_queue(llm: LLMClient, dataset: str | None = None) -> dict[str, Any]:
     waiting = [q for q in waiting if in_dataset(q)]
     return {
         "worker": {**worker_state.snapshot(), "auto_mode": settings.auto_mode, "auto_sort": settings.auto_sort,
-                   "auto_dataset": settings.auto_dataset},
+                   "auto_calls": settings.auto_calls, "auto_dataset": settings.auto_dataset},
         "model": {"profile": llm.profile.name, "name": llm.model, "avg_eval_sec": avg, "workers": workers},
         "running": running,
         "queued": [q for q in waiting if q["state"] == "queued"],

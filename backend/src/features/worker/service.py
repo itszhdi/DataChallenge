@@ -24,7 +24,7 @@ async def ticks(interval: float) -> AsyncIterator[None]:
 
 def next_candidate() -> dict | None:
     s = load_settings()
-    found = db.auto_candidates(s.auto_sort, s.auto_dataset, get_settings().exclude_channels, limit=1)
+    found = db.auto_candidates(s.auto_sort, s.auto_dataset, get_settings().exclude_channels, limit=1, calls=s.auto_calls)
     return found[0] if found else None
 
 
