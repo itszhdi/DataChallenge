@@ -6,8 +6,8 @@ from src import db
 from src.dependencies import LLMDep
 from src.features.evaluation import jobs, service
 from src.features.evaluation.exceptions import ConversationNotFound, JobNotFound, NoActiveChecklist
-from src.features.evaluation.prompt import preview
 from src.features.evaluation.schemas import BatchRequest, EvaluateRequest
+from src.llm.prompts import preview
 
 router = APIRouter(tags=["evaluation"])
 

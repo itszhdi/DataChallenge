@@ -17,10 +17,10 @@ from src.features.evaluation.exceptions import (
     LLMUnavailable,
     NoActiveChecklist,
 )
-from src.features.evaluation.prompt import build_messages, build_schema, select_criteria
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
 from src.llm.client import LLMClient, LLMError
+from src.llm.prompts import build_messages, build_schema, ground_answers, select_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +82,16 @@ def validate_answers(
         if is_no and not checked and not evidence:
             warnings.append(f"{cid}: «Нет» без доказательств и проверенного участка")
 
-        answers[cid] = {
+        answer = {
             "status": "ok", "na": na, "value": None if na else value, "explanation": (a.get("explanation") or "").strip(),
             "evidence_ids": evidence, "checked_range": checked, "flags": flags,
         }
+        # Preserve the exact quote and its verification result for review/debugging.
+        if "quote" in a:
+            answer["quote"] = a.get("quote", "")
+            answer["quote_ref"] = a.get("quote_ref", 0)
+            answer["quote_verified"] = bool(a.get("quote_verified"))
+        answers[cid] = answer
     return answers, warnings
 
 
@@ -98,6 +104,7 @@ async def run_llm(
     except LLMError as e:
         logger.error("Evaluation failed for %s: %s", conversation["id"], e)
         raise LLMUnavailable(str(e)) from e
+    raw = ground_answers(raw, conversation["transcript"])
     answers, warnings = validate_answers(criteria, raw, len(conversation["transcript"]))
     if warnings:
         logger.warning("Validation warnings for %s: %s", conversation["id"], warnings)
