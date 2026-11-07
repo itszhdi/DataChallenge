@@ -1,0 +1,44 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, TypedDict
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from src import db
+from src.config.settings import Settings, get_settings
+from src.router import api_router
+
+
+class State(TypedDict):
+    settings: Settings
+
+
+def setup_logging(level: str) -> None:
+    logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # ** httpx на INFO печатает полный URL запроса, а в URL датасета секретная подпись
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[State]:
+    settings = get_settings()
+    setup_logging(settings.log_level)
+    await asyncio.to_thread(db.init_db)
+    await asyncio.to_thread(db.seed_default_checklist, settings.default_checklist_path)
+    logging.getLogger(__name__).info("CQA started: provider=%s model=%s", settings.llm_provider, settings.llm_model)
+    yield {"settings": settings}
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    app = FastAPI(title="CQA", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(
+        CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"]
+    )
+    app.include_router(api_router)
+    return app
+
+
+app = create_app()

@@ -1,0 +1,21 @@
+{"error": "", "isSuccess": true, "data": {"dataset_group_id": "SAMPLE", "total_records": 3, "records": [
+  {"conversation_id": "s-ru-001", "channel": "agent chat", "language": "RU", "audio_url": null, "transcript": [
+    {"timestamp": "00:01", "speaker": "bot", "text": "Здравствуйте! Я виртуальный помощник. Опишите ваш вопрос."},
+    {"timestamp": "00:15", "speaker": "client", "text": "Хочу узнать, почему не прошло пополнение брокерского счёта на 50 000 тенге вчера."},
+    {"timestamp": "00:20", "speaker": "bot", "text": "Перевожу на оператора."},
+    {"timestamp": "00:40", "speaker": "operator", "text": "Здравствуйте! Меня зовут Алия. Для проверки операции подтвердите, пожалуйста, личность в приложении."},
+    {"timestamp": "01:30", "speaker": "system", "text": "Клиент идентифицирован"},
+    {"timestamp": "02:10", "speaker": "operator", "text": "Спасибо. Платёж на 50 000 тенге в статусе обработки, зачислится до конца дня. Могу ещё чем-то помочь?"},
+    {"timestamp": "02:30", "speaker": "client", "text": "Нет, спасибо."},
+    {"timestamp": "02:40", "speaker": "operator", "text": "Хорошего дня, до свидания!"},
+    {"timestamp": "02:45", "speaker": "system", "text": "Чат закрыт"}]},
+  {"conversation_id": "s-kz-002", "channel": "agent chat", "language": "KZ", "audio_url": null, "transcript": [
+    {"timestamp": "00:05", "speaker": "client", "text": "Сәлеметсіз бе, шетелдік акцияларды сатып алу комиссиясы қанша?"},
+    {"timestamp": "04:30", "speaker": "operator", "text": "Здравствуйте. Комиссия 0,1% от суммы сделки."},
+    {"timestamp": "05:00", "speaker": "client", "text": "Рахмет."},
+    {"timestamp": "05:10", "speaker": "system", "text": "Чат закрыт"}]},
+  {"conversation_id": "s-en-003", "channel": "voice call", "language": "EN", "audio_url": "https://example.com/rec-003.mp3", "transcript": [
+    {"timestamp": "2026-11-06T10:15:02+05:00", "speaker": "operator", "text": "Freedom Broker, good morning, my name is John. How can I help?"},
+    {"timestamp": "2026-11-06T10:15:10+05:00", "speaker": "client", "text": "Hi, I'd like to know the trading hours for US stocks."},
+    {"timestamp": "2026-11-06T10:15:25+05:00", "speaker": "operator", "text": "US markets are open from 19:30 to 02:00 Astana time. Anything else? Have a nice day!"}]}
+]}}
