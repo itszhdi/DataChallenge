@@ -16,7 +16,7 @@ export function useImportDataset(onImported) {
       setDataset(result.dataset)
       queryClient.invalidateQueries()
       toast.success(t('import.done', { count: result.imported, skipped: result.skipped, dataset: result.dataset }))
-      onImported()
+      onImported(result)
     },
     onError: notify,
   })

@@ -1,16 +1,22 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LuFileJson } from 'react-icons/lu'
+import { useAppSettings } from '../../hooks/useAppSettings'
 import { useImportDataset } from '../../hooks/useImportDataset'
 import Button from '../ui/Button'
 import { Field, Input } from '../ui/Field'
 import Modal from '../ui/Modal'
 
-export default function ImportModal({ open, onClose }) {
+export default function ImportModal({ open, onClose, onJobStarted }) {
   const { t } = useTranslation()
-  const [groupId, setGroupId] = useState('DEV')
+  const { data: settings } = useAppSettings()
+  const [editedGroupId, setGroupId] = useState(null)
+  const groupId = editedGroupId ?? settings?.default_group_id ?? ''
   const [url, setUrl] = useState('')
-  const { mutate, isPending } = useImportDataset(onClose)
+  const { mutate, isPending } = useImportDataset((result) => {
+    if (result.job_id) onJobStarted(result.job_id)
+    onClose()
+  })
 
   const submitFile = (event) => {
     const file = event.target.files[0]

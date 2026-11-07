@@ -22,7 +22,7 @@ export default function DialogsPage() {
   const format = useFormat()
   const { dataset } = useDataset()
   const conversations = useConversations(dataset)
-  const { job, isRunning, start, dismiss } = useBatchJob()
+  const { job, isRunning, start, track, dismiss } = useBatchJob()
   const [channel, setChannel] = useState(ALL)
   const [appeals, setAppeals] = useState(ALL)
 
@@ -61,7 +61,7 @@ export default function DialogsPage() {
     <>
       <PageHeader
         title={t('nav.dialogs')}
-        actions={<DialogsToolbar hasDialogs={Boolean(conversations.data?.length)} isRunning={isRunning} startBatch={start} />}
+        actions={<DialogsToolbar hasDialogs={Boolean(conversations.data?.length)} isRunning={isRunning} startBatch={start} trackJob={track} />}
       />
       {job && <JobProgress job={job} onDismiss={dismiss} />}
       <Card glass>

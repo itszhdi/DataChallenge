@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from src import db
+from src.config.settings import get_settings
 from src.features.checklists.schemas import ChecklistData
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ def diff_checklists(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str
     result["removed"] = [cid for cid in old_by_id if cid not in new_by_id]
     result["needs_llm"] = result["changed"] + result["new"]
     return result
+
+
+def load_default_checklist() -> dict[str, Any]:
+    # * Эталон организаторов: файл, а не первая версия в БД — её могли изменить
+    return json.loads(get_settings().default_checklist_path.read_text(encoding="utf-8"))
 
 
 def save_checklist(data: ChecklistData, comment: str) -> dict[str, Any]:

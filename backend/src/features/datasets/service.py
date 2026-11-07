@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from src import db
 from src.config.settings import get_settings
 from src.features.datasets.exceptions import DatasetFetchError, DatasetSourceNotConfigured, InvalidDatasetPayload
-from src.features.datasets.schemas import ImportResult, Record
+from src.features.datasets.schemas import ImportResult, Record, SourceCheck
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def import_payload(payload: Any, dataset: str | None = None) -> ImportResult:
     return ImportResult(dataset=dataset, imported=imported, skipped=len(errors), errors=errors)
 
 
-async def fetch_and_import(group_id: str | None, url: str | None = None) -> ImportResult:
+async def fetch_payload(group_id: str | None, url: str | None = None) -> Any:
     custom = url is not None
     if not url:
         base = get_settings().dataset_api_url
@@ -68,4 +68,15 @@ async def fetch_and_import(group_id: str | None, url: str | None = None) -> Impo
         # ! Не логируем URL целиком — в нём секретная подпись
         logger.error("Dataset fetch failed for group_id=%s: %s", group_id, type(e).__name__)
         raise DatasetFetchError(type(e).__name__) from e
+    return payload
+
+
+async def fetch_and_import(group_id: str | None, url: str | None = None) -> ImportResult:
+    payload = await fetch_payload(group_id, url)
     return await asyncio.to_thread(import_payload, payload, group_id)
+
+
+async def check_source(group_id: str) -> SourceCheck:
+    # * Проверка подключения: скачиваем набор, но ничего не записываем в БД
+    remote_id, records = extract_records(await fetch_payload(group_id))
+    return SourceCheck(dataset=remote_id or group_id, total_records=len(records))

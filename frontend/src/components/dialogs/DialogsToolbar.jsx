@@ -7,7 +7,7 @@ import ConfirmModal from '../ui/ConfirmModal'
 import ExportModal from './ExportModal'
 import ImportModal from './ImportModal'
 
-export default function DialogsToolbar({ hasDialogs, isRunning, startBatch }) {
+export default function DialogsToolbar({ hasDialogs, isRunning, startBatch, trackJob }) {
   const { t } = useTranslation()
   const { dataset } = useDataset()
   const [modal, setModal] = useState(null)
@@ -31,7 +31,7 @@ export default function DialogsToolbar({ hasDialogs, isRunning, startBatch }) {
       <Button icon={LuDownload} onClick={() => setModal('export')}>
         {t('dialogs.export')}
       </Button>
-      <ImportModal open={modal === 'import'} onClose={closeModal} />
+      <ImportModal open={modal === 'import'} onClose={closeModal} onJobStarted={trackJob} />
       <ExportModal open={modal === 'export'} onClose={closeModal} />
       <ConfirmModal
         open={modal === 'confirm'}

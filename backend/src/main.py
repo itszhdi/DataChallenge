@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src import db
 from src.config.settings import Settings, get_settings
+from src.features.settings.service import apply_app_settings, load_app_settings
 from src.llm.client import LLMClient
 from src.router import api_router
 
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[State]:
     await asyncio.to_thread(db.seed_default_checklist, settings.default_checklist_path)
     logging.getLogger(__name__).info("CQA started: provider=%s model=%s", settings.llm_provider, settings.llm_model)
     llm = LLMClient(settings)
+    apply_app_settings(llm, await asyncio.to_thread(load_app_settings))
     try:
         yield {"settings": settings, "llm": llm}
     finally:

@@ -3,6 +3,7 @@ import { LuMenu, LuMoon, LuSettings, LuSun } from 'react-icons/lu'
 import { Link, NavLink } from 'react-router-dom'
 import clsx from 'clsx'
 import logo from '../../assets/logo.png'
+import whiteLogo from '../../assets/whiteLogo.png'
 import { useTheme } from '../../hooks/useTheme'
 import { UI_LANGUAGES } from '../../i18n'
 
@@ -36,6 +37,9 @@ export default function Navbar({ isSidebarOpen, onToggleSidebar }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-line bg-surface px-3 sm:gap-5 sm:px-8">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-5">
+        <Link to="/" className="min-w-0">
+          <img src={theme === 'dark' ? whiteLogo : logo} alt="Freedom" className="h-8 w-auto max-w-full object-contain object-left" />
+        </Link>
         <button
           type="button"
           onClick={onToggleSidebar}
@@ -45,9 +49,6 @@ export default function Navbar({ isSidebarOpen, onToggleSidebar }) {
         >
           <LuMenu className="size-5" />
         </button>
-        <Link to="/" className="min-w-0">
-          <img src={logo} alt="Freedom" className="h-8 w-auto max-w-full object-contain object-left" />
-        </Link>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-5">
         <LanguageSwitcher />

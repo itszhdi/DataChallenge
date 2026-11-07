@@ -32,3 +32,9 @@ class ImportResult(BaseModel):
     imported: int
     skipped: int
     errors: list[str] = []
+    job_id: str | None = None
+
+
+class SourceCheck(BaseModel):
+    dataset: str
+    total_records: int

@@ -10,7 +10,7 @@ const LINKS = [
   { to: '/dialogs', labelKey: 'nav.dialogs', icon: LuMessagesSquare },
 ]
 
-function SidebarLinks({ onNavigate }) {
+function SidebarLinks({ collapsed, onNavigate }) {
   const { t } = useTranslation()
   return (
     <nav aria-label={t('nav.main')} className="flex flex-col gap-1">
@@ -20,15 +20,17 @@ function SidebarLinks({ onNavigate }) {
           to={to}
           end={end}
           onClick={onNavigate}
+          title={collapsed ? t(labelKey) : undefined}
           className={({ isActive }) =>
             clsx(
-              'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap',
+              'flex items-center rounded-lg py-2.5 text-sm font-medium whitespace-nowrap',
+              collapsed ? 'justify-center' : 'gap-2.5 px-3',
               isActive ? 'bg-brand-soft text-brand-text' : 'text-ink-muted hover:bg-surface-muted hover:text-ink',
             )
           }
         >
-          <Icon className="size-5" />
-          {t(labelKey)}
+          <Icon className="size-5 shrink-0" />
+          <span className={clsx(collapsed && 'sr-only')}>{t(labelKey)}</span>
         </NavLink>
       ))}
     </nav>
@@ -62,15 +64,12 @@ export default function Sidebar({ isMobile, isOpen, onCloseMobile }) {
   if (isMobile) return <MobileSidebar isOpen={isOpen} onClose={onCloseMobile} />
   return (
     <aside
-      inert={!isOpen}
       className={clsx(
-        'glass sticky top-16 h-[calc(100vh-4rem)] shrink-0 overflow-hidden border-line transition-[width] duration-200',
-        isOpen ? 'w-56 border-r' : 'w-0',
+        'glass sticky top-16 h-[calc(100vh-4rem)] shrink-0 overflow-hidden border-r border-line p-3 transition-[width] duration-200',
+        isOpen ? 'w-56' : 'w-16',
       )}
     >
-      <div className="w-56 p-3">
-        <SidebarLinks />
-      </div>
+      <SidebarLinks collapsed={!isOpen} />
     </aside>
   )
 }

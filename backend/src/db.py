@@ -57,6 +57,12 @@ CREATE TABLE IF NOT EXISTS appeals (
     resolved_at TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_appeals_evaluation ON appeals(evaluation_id);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 JSON_FIELDS = {"transcript", "data", "answers", "meta", "new_answer"}
@@ -105,6 +111,24 @@ def init_db() -> None:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA)
     logger.info("Database ready at %s", path)
+
+
+# * Настройки приложения: одна запись, поля проверяются схемой на уровне фичи
+
+
+def get_app_settings() -> dict[str, Any] | None:
+    with connect() as conn:
+        row = _row(conn.execute("SELECT data FROM app_settings WHERE id = 1").fetchone())
+    return row["data"] if row else None
+
+
+def save_app_settings(data: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO app_settings (id, data, updated_at) VALUES (1, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at""",
+            (_dump(data), _now()),
+        )
 
 
 # * Диалоги

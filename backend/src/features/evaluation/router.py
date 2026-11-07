@@ -20,10 +20,7 @@ async def evaluate(body: EvaluateRequest, llm: LLMDep) -> dict:
 
 @router.post("/evaluate/batch", status_code=status.HTTP_202_ACCEPTED)
 async def evaluate_batch(body: BatchRequest, llm: LLMDep) -> dict:
-    ids = await asyncio.to_thread(service.resolve_batch_ids, body.conversation_ids, body.dataset, body.only_missing)
-    job = jobs.create_job(body.mode, len(ids))
-    jobs.spawn(service.run_batch(llm, job, ids, body.mode))
-    return job
+    return await service.start_batch(llm, body.dataset, body.mode, body.only_missing, body.conversation_ids)
 
 
 @router.get("/jobs/{job_id}")

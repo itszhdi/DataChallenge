@@ -24,6 +24,11 @@ async def get_active() -> dict:
     return checklist
 
 
+@router.get("/default")
+async def get_default() -> dict:
+    return await asyncio.to_thread(service.load_default_checklist)
+
+
 @router.get("/{checklist_id}")
 async def get_checklist(checklist_id: int) -> dict:
     checklist = await asyncio.to_thread(db.get_checklist, checklist_id)

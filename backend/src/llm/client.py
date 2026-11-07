@@ -43,6 +43,9 @@ def gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def extract_json(text: str) -> dict[str, Any]:
+    # ** Qwen пишет рассуждения в <think>: в них бывают фигурные скобки, поэтому блок отбрасываем
+    _, closed, answer = text.rpartition("</think>")
+    text = answer if closed else text
     # * Ответ может прийти в ```json-обёртке: берём первый {...}
     start = text.find("{")
     if start < 0:
@@ -65,9 +68,18 @@ class LLMClient:
             timeout=settings.llm_timeout_sec,
             max_retries=0,
         )
-        self._semaphore = asyncio.Semaphore(max(1, settings.llm_concurrency))
+        self.concurrency = max(1, settings.llm_concurrency)
+        self._min_interval_sec = settings.llm_min_interval_sec
+        self._semaphore = asyncio.Semaphore(self.concurrency)
         self._throttle_lock = asyncio.Lock()
         self._last_call = 0.0
+
+    def configure(self, concurrency: int, min_interval_sec: float) -> None:
+        # ** Идущие вызовы дорабатывают со старым семафором, новые берут новый лимит
+        self.concurrency = concurrency
+        self._min_interval_sec = min_interval_sec
+        self._semaphore = asyncio.Semaphore(concurrency)
+        logger.info("LLM limits updated: concurrency=%d min_interval_sec=%.2f", concurrency, min_interval_sec)
 
     async def close(self) -> None:
         await self.client.close()
@@ -79,7 +91,7 @@ class LLMClient:
     async def _throttle(self) -> None:
         # * Глобальный минимальный интервал между запросами (бесплатный Gemini ~10 запросов/мин)
         async with self._throttle_lock:
-            wait = self._last_call + self.settings.llm_min_interval_sec - time.monotonic()
+            wait = self._last_call + self._min_interval_sec - time.monotonic()
             if wait > 0:
                 await asyncio.sleep(wait)
             self._last_call = time.monotonic()

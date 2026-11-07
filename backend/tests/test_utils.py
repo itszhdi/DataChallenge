@@ -41,3 +41,4 @@ def test_gemini_schema_strips_unsupported():
     assert "enum" not in out["properties"]["v"] and "0, 5, 10" in out["properties"]["v"]["description"]
     assert out["properties"]["f"]["enum"] == ["insult"]
     assert extract_json('```json\n{"a": 1}\n```') == {"a": 1}
+    assert extract_json('<think>скобки {не JSON}</think>\n{"a": 2}') == {"a": 2}

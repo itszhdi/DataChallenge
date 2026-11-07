@@ -19,6 +19,8 @@ from src.features.evaluation.exceptions import (
 )
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
+from src.features.settings.schemas import QueueSort
+from src.features.settings.service import load_app_settings
 from src.llm.client import LLMClient, LLMError
 from src.llm.prompts import build_messages, build_schema, ground_answers, select_criteria
 
@@ -250,7 +252,7 @@ async def reapply_many(llm: LLMClient, dataset: str | None) -> dict[str, Any]:
 
 
 async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
-    # ** Параллелизм ограничивает сам LLM-клиент (LLM_CONCURRENCY + троттлинг), здесь просто запускаем всё
+    # ** Воркеры берут id по порядку, поэтому очередь идёт в выбранной сортировке; число воркеров = лимит LLM-клиента
     action = evaluate_conversation if mode == "evaluate" else reapply_conversation
 
     async def one(cid: str) -> None:
@@ -267,8 +269,14 @@ async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[
         finally:
             job["processed"] += 1
 
+    pending = iter(conversation_ids)
+
+    async def worker() -> None:
+        for cid in pending:
+            await one(cid)
+
     logger.info("Batch job %s (%s) started: %d conversations", job["id"], mode, len(conversation_ids))
-    await asyncio.gather(*(one(cid) for cid in conversation_ids))
+    await asyncio.gather(*(worker() for _ in range(llm.concurrency)))
     jobs.finish(job)
     logger.info(
         "Batch job %s finished: done=%d failed=%d skipped=%d",
@@ -276,11 +284,31 @@ async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[
     )
 
 
+QUEUE_ORDER: dict[QueueSort, tuple[str, bool]] = {
+    "short_first": ("messages", False),
+    "long_first": ("messages", True),
+    "newest_first": ("imported_at", True),
+    "oldest_first": ("imported_at", False),
+}
+
+
 def resolve_batch_ids(conversation_ids: list[str] | None, dataset: str | None, only_missing: bool) -> list[str]:
-    items = db.list_conversations(dataset)
+    app = load_app_settings()
+    items = list_conversations_with_scores(dataset) if app.include_errors else db.list_conversations(dataset)
     if conversation_ids is not None:
         wanted = set(conversation_ids)
         items = [i for i in items if i["id"] in wanted]
     if only_missing:
-        items = [i for i in items if not i["last_evaluation_id"]]
-    return [i["id"] for i in items]
+        # * Упавший диалог без оценки и так попадает в очередь; include_errors добавляет оценки с критериями без ответа
+        items = [i for i in items if not i["last_evaluation_id"] or (app.include_errors and i["preliminary"])]
+    key, reverse = QUEUE_ORDER[app.queue_sort]
+    return [i["id"] for i in sorted(items, key=lambda i: i[key], reverse=reverse)]
+
+
+async def start_batch(
+    llm: LLMClient, dataset: str | None, mode: str = "evaluate", only_missing: bool = False, conversation_ids: list[str] | None = None
+) -> dict[str, Any]:
+    ids = await asyncio.to_thread(resolve_batch_ids, conversation_ids, dataset, only_missing)
+    job = jobs.create_job(mode, len(ids))
+    jobs.spawn(run_batch(llm, job, ids, mode))
+    return job

@@ -55,6 +55,7 @@ export function useBatchJob() {
     job: job.data ?? null,
     isRunning: start.isPending || (Boolean(jobId) && job.data?.status !== 'finished' && !job.isError),
     start: start.mutate,
+    track: rememberJob,
     dismiss: () => rememberJob(null),
   }
 }

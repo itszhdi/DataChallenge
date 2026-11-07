@@ -1,10 +1,12 @@
 # * Сквозной сценарий защиты без сети: модель подменена, проверяем что LLM зовётся только когда нужно
+import asyncio
 from pathlib import Path
 
 import httpx
 import pytest
 
 from src.config.settings import get_settings
+from src.features.evaluation.service import resolve_batch_ids
 from src.llm.client import LLMClient
 from src.main import app
 
@@ -91,3 +93,38 @@ async def test_full_flow(client):
     assert row["conversation_id"] == "s-ru-001" and row["criteria"]["c04_consult"]["percent"] == 50.0
     assert row["weak_criterion"] == "c04_consult" and board["bottleneck"]["criterion_id"] == "c04_consult"
     assert "c08_gross" not in {c["id"] for c in board["criteria_averages"]}
+
+
+async def test_settings_order_and_auto_evaluation(client):
+    assert (await client.get("/api/settings")).json()["request_delay_ms"] == 500
+    settings = {"queue_sort": "long_first", "only_missing": True, "include_errors": False, "concurrency": 3,
+                "request_delay_ms": 0, "auto_evaluate_on_import": True, "default_group_id": "CTRL"}
+    assert (await client.put("/api/settings", json=settings)).json() == settings
+    assert (await client.put("/api/settings", json={**settings, "concurrency": 9})).status_code == 422
+
+    # * Автооценка запускается импортом, очередь идёт от длинных диалогов
+    imported = (await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})).json()
+    assert imported["job_id"]
+    for _ in range(50):
+        job = (await client.get(f"/api/jobs/{imported['job_id']}")).json()
+        if job["status"] == "finished":
+            break
+        await asyncio.sleep(0.01)
+    assert job["status"] == "finished" and len(job["done"]) == 2 and len(job["skipped"]) == 1
+
+    rows = (await client.get("/api/conversations")).json()
+    expected = [r["id"] for r in sorted(rows, key=lambda r: -r["messages"])]
+    assert resolve_batch_ids(None, None, only_missing=False) == expected
+
+
+async def test_default_checklist_and_source_check(client, monkeypatch):
+    default = (await client.get("/api/checklists/default")).json()
+    assert len(default["criteria"]) == 8
+
+    async def fake_fetch(group_id, url=None):
+        return {"isSuccess": True, "data": {"dataset_group_id": group_id, "records": [{}, {}]}}
+
+    monkeypatch.setattr("src.features.datasets.service.fetch_payload", fake_fetch)
+    check = (await client.get("/api/datasets/check", params={"group_id": "CTRL"})).json()
+    assert check == {"dataset": "CTRL", "total_records": 2}
+    assert (await client.get("/api/datasets")).json() == []

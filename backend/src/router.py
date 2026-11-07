@@ -8,6 +8,7 @@ from src.features.conversations.router import router as conversations_router
 from src.features.datasets.router import router as datasets_router
 from src.features.evaluation.router import router as evaluation_router
 from src.features.export.router import router as export_router
+from src.features.settings.router import router as settings_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(datasets_router)
@@ -18,6 +19,7 @@ api_router.include_router(appeals_router)
 api_router.include_router(analytics_router)
 api_router.include_router(export_router)
 api_router.include_router(audio_router)
+api_router.include_router(settings_router)
 
 
 @api_router.get("/health", tags=["system"])
