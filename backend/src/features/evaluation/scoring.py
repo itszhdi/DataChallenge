@@ -2,7 +2,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-ANSWER_FIELDS = ("explanation", "evidence_ids", "checked_range", "flags")
+ANSWER_FIELDS = ("explanation", "evidence_ids", "checked_range", "flags", "needs_review", "unverified_claims")
 
 
 def _d(value: Any) -> Decimal:
@@ -29,7 +29,7 @@ def apply_appeals(answers: dict[str, Any], appeals: list[dict[str, Any]]) -> dic
     return final
 
 
-def score_evaluation(checklist: dict[str, Any], answers: dict[str, Any]) -> dict[str, Any]:
+def score_evaluation(checklist: dict[str, Any], answers: dict[str, Any], channel: str | None = None) -> dict[str, Any]:
     digits = int(checklist.get("settings", {}).get("rounding", 2))
     warnings: list[str] = []
     items: list[dict[str, Any]] = []
@@ -57,7 +57,11 @@ def score_evaluation(checklist: dict[str, Any], answers: dict[str, Any]) -> dict
 
         na = bool(ans.get("na"))
         value = ans.get("value")
-        if na and not c.get("na_allowed"):
+        na_allowed = (
+            (channel or "").strip().lower() == "voice call"
+            if cid == "c01_contact" else bool(c.get("na_allowed"))
+        )
+        if na and not na_allowed:
             warnings.append(f"{cid}: N/A не допускается — засчитано как «Нет»")
             na, value = False, 0
         if na:

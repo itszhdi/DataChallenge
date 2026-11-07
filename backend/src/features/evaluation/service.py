@@ -18,12 +18,13 @@ from src.features.evaluation.exceptions import (
     LLMUnavailable,
     NoActiveChecklist,
 )
+from src.features.evaluation.operator_summary import build_operator_summary
 from src.features.evaluation.scoring import apply_appeals, score_evaluation
 from src.features.evaluation.timing import with_offsets
 from src.features.settings.schemas import QueueSort
 from src.features.settings.service import load_app_settings
 from src.llm.client import LLMClient, LLMError
-from src.llm.prompts import build_messages, build_schema, ground_answers, select_criteria
+from src.llm.prompts import PROMPT_VERSION, build_messages, build_schema, ground_answers, select_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -85,9 +86,15 @@ def validate_answers(
         if is_no and not checked and not evidence:
             warnings.append(f"{cid}: «Нет» без доказательств и проверенного участка")
 
+        raw_claims = a.get("unverified_claims")
+        if not isinstance(raw_claims, list):
+            raw_claims = []
+        claims = [x.strip()[:500] for x in raw_claims if isinstance(x, str) and x.strip()][:10]
         answer = {
             "status": "ok", "na": na, "value": None if na else value, "explanation": (a.get("explanation") or "").strip(),
             "evidence_ids": evidence, "checked_range": checked, "flags": flags,
+            "needs_review": bool(a.get("needs_review")) or bool(claims),
+            "unverified_claims": claims,
         }
         # Preserve the exact quote and its verification result for review/debugging.
         if "quote" in a:
@@ -101,9 +108,22 @@ def validate_answers(
 async def run_llm(
     llm: LLMClient, checklist: dict[str, Any], conversation: dict[str, Any], criteria: list[dict[str, Any]]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    # c01 N/A is a recording limitation specific to calls; keep stored checklist unchanged.
+    criteria = [
+        {**c, **({
+            "na_allowed": (conversation.get("channel") or "").strip().lower() == "voice call",
+            "na_condition": "Запись звонка явно начинается после начала разговора, поэтому приветствие могло не попасть в запись."
+                if (conversation.get("channel") or "").strip().lower() == "voice call" else "",
+        } if c["id"] == "c01_contact" else {})}
+        for c in criteria
+    ]
     messages = build_messages(checklist, conversation, criteria)
     try:
-        raw, meta = await llm.complete_json(messages, build_schema(criteria))
+        selected_model = llm.model_for_channel(conversation.get("channel"))
+        if selected_model == llm.model:
+            raw, meta = await llm.complete_json(messages, build_schema(criteria))
+        else:
+            raw, meta = await llm.complete_json(messages, build_schema(criteria), channel=conversation.get("channel"))
     except LLMError as e:
         logger.error("Evaluation failed for %s: %s", conversation["id"], e)
         raise LLMUnavailable(str(e), e.code) from e
@@ -111,7 +131,12 @@ async def run_llm(
     answers, warnings = validate_answers(criteria, raw, len(conversation["transcript"]))
     if warnings:
         logger.warning("Validation warnings for %s: %s", conversation["id"], warnings)
-    meta.update(warnings=warnings, evaluated_criteria=[c["id"] for c in criteria])
+    meta.update(
+        prompt_version=PROMPT_VERSION,
+        criteria_prompt_versions={c["id"]: PROMPT_VERSION for c in criteria},
+        warnings=warnings,
+        evaluated_criteria=[c["id"] for c in criteria],
+    )
     return answers, meta
 
 
@@ -143,8 +168,8 @@ def build_card(evaluation_id: int) -> dict[str, Any]:
     appeals = db.list_appeals(evaluation_id=evaluation_id)
     meta = evaluation["meta"]
 
-    original = score_evaluation(checklist["data"], evaluation["answers"])
-    final = score_evaluation(checklist["data"], apply_appeals(evaluation["answers"], appeals))
+    original = score_evaluation(checklist["data"], evaluation["answers"], conversation.get("channel"))
+    final = score_evaluation(checklist["data"], apply_appeals(evaluation["answers"], appeals), conversation.get("channel"))
     for score in (original, final):
         score["warnings"] = meta.get("warnings", []) + score["warnings"]
 
@@ -155,6 +180,7 @@ def build_card(evaluation_id: int) -> dict[str, Any]:
         "meta": meta,
         "original": original,
         "final": final,
+        "operator_summary": build_operator_summary(checklist["data"], final),
         "appeals": appeals,
         "conversation": conversation,
     }
@@ -170,7 +196,7 @@ def summarize_latest(dataset: str | None = None) -> dict[str, dict[str, Any]]:
     out = {}
     for e in evaluations:
         cl = checklists.setdefault(e["checklist_id"], db.get_checklist(e["checklist_id"])["data"])
-        score = score_evaluation(cl, apply_appeals(e["answers"], appeals_by_eval[e["id"]]))
+        score = score_evaluation(cl, apply_appeals(e["answers"], appeals_by_eval[e["id"]]), e.get("channel"))
         out[e["conversation_id"]] = {"evaluation": e, "checklist": cl, "score": score}
     return out
 
@@ -209,7 +235,21 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
     needs = [c["id"] for c in active["data"]["criteria"] if c["id"] not in copied]
     answers = {cid: old["answers"][cid] for cid in copied}
     old_warnings = [w for w in old["meta"].get("warnings", []) if w.split(":")[0] in copied]
-    meta: dict[str, Any] = {"reapplied_from": evaluation_id, "copied": copied, "evaluated_criteria": needs, "diff": diff, "llm": None}
+    old_meta = old.get("meta") or {}
+    inherited_versions = old_meta.get("criteria_prompt_versions") or {}
+    criteria_versions = {
+        cid: inherited_versions.get(cid, old_meta.get("prompt_version") or "unknown")
+        for cid in copied
+    }
+    meta: dict[str, Any] = {
+        "reapplied_from": evaluation_id,
+        "copied": copied,
+        "evaluated_criteria": needs,
+        "diff": diff,
+        "llm": None,
+        "prompt_version": old_meta.get("prompt_version"),
+        "criteria_prompt_versions": criteria_versions,
+    }
 
     if needs:
         conversation = await asyncio.to_thread(db.get_conversation, old["conversation_id"])
@@ -219,8 +259,10 @@ async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
         new_answers, llm_meta = await run_llm(llm, active["data"], conversation, criteria)
         answers.update(new_answers)
         meta["llm"] = {k: v for k, v in llm_meta.items() if k not in ("warnings", "evaluated_criteria")}
-        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd") if k in llm_meta})
+        meta.update({k: llm_meta[k] for k in ("provider", "model", "tokens", "cost_usd", "prompt_version", "fallback_used") if k in llm_meta})
+        criteria_versions.update(llm_meta.get("criteria_prompt_versions") or {})
         old_warnings += llm_meta["warnings"]
+    meta["criteria_prompt_versions"] = criteria_versions
     meta["warnings"] = old_warnings
 
     new_id = await asyncio.to_thread(db.insert_evaluation, old["conversation_id"], active["id"], answers, meta, evaluation_id)

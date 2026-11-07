@@ -9,6 +9,8 @@ FastAPI-сервис для кейса Freedom «Conversation Quality Analytics�
 - Смена **веса** → новая версия чек-листа и пересчёт **без вызова модели**.
 - Изменение **формулировки / шкалы / N/A / пояснения** или **новый** критерий → модель переоценивает **только эти критерии**, остальные ответы копируются.
 - Решение по **апелляции** → пересчёт без модели. В карточке видны исходная (`original`) и финальная (`final`) оценка.
+- В карточке отдельно показывается краткая сводка оператору: удачные действия, ошибки и конкретные рекомендации. Она строится из уже полученных ответов и не меняет оценку или итоговый балл.
+- Каждая оценка сохраняет версию промпта в `meta.prompt_version`; при частичной переоценке версии также фиксируются по критериям в `meta.criteria_prompt_versions`.
 
 ## Установка и запуск
 
@@ -19,6 +21,7 @@ cp .env.example .env         # вписать DATASET_API_URL и LLM_API_KEY
 make run                     # http://localhost:8000/api/health
 make import-dev              # импорт DEV из API организаторов
 make eval ID=p1-ru-001       # оценить один диалог
+make golden                  # сверить модель с tests/golden.csv
 make batch DATASET=DEV       # пакетная оценка в фоне → job id
 make job JOB=<id>            # прогресс
 make test                    # тесты
@@ -60,7 +63,7 @@ Swagger отключён намеренно. Запуск фронтенда о�
 | POST | `/evaluate` `{"conversation_id":"..."}` | Оценить диалог, вернуть карточку |
 | POST | `/evaluate/batch` `{"dataset":"DEV","conversation_ids":null,"mode":"evaluate"\|"reapply","only_missing":false}` | Пакетная обработка в фоне |
 | GET | `/jobs/{id}` | Прогресс: `total`, `processed`, `done`, `failed`, `skipped` |
-| GET | `/evaluations/{id}` | Карточка: `original`, `final`, `meta`, `appeals`, `conversation` |
+| GET | `/evaluations/{id}` | Карточка: `original`, `final`, `operator_summary`, `meta`, `appeals`, `conversation` |
 | POST | `/evaluations/{id}/reapply` | Применить активный чек-лист (LLM только для изменённых критериев) |
 | POST | `/evaluations/{id}/appeals` `{"criterion_id","comment"}` | Подать апелляцию |
 | GET | `/appeals?status=open` | Очередь проверяющего: спорный критерий + фрагмент ±2 реплики |
@@ -68,10 +71,7 @@ Swagger отключён намеренно. Запуск фронтенда о�
 | GET | `/analytics?dataset=` | Средний итог, разбивка по языкам/каналам/критериям, грубые ошибки, 5 худших |
 | GET | `/analytics/dashboard?dataset=` | Сводка для супервайзера: KPI, критерии, сегменты, распределение итогов и строки диалогов для drill-down |
 | GET | `/prompt/{conversation_id}` | Промпт и JSON-схема без вызова модели (отладка) |
-| GET, PUT | `/settings` | Очередь, потоки, задержка, автооценка и group_id по умолчанию |
-| GET | `/datasets/check?group_id=` | Проверка подключения к API организаторов без импорта |
-| GET | `/checklists/default` | Эталонный чек-лист для сброса |
-| GET | `/export?dataset=&team_name=&model_mode=&model_name=` | JSON с финальными оценками (с учётом апелляций) |
+| GET | `/export?dataset=&team_name=&model_mode=&model_name=` | JSON v1.1 с финальными оценками (с учётом апелляций) и версиями промпта по оценке и критериям |
 | GET | `/audio/{conversation_id}` | Прокси записи звонка: достаёт mp3 со страницы организаторов, поддерживает Range (перемотка) |
 
 ### Сценарий защиты: заменить критерий
@@ -80,6 +80,11 @@ Swagger отключён намеренно. Запуск фронтенда о�
 
 ### Контрольный набор организаторов
 `POST /datasets/import {"group_id":"<новый>"}`, затем `POST /evaluate/batch {"dataset":"<новый>"}`.
+
+### Ручной эталон (golden)
+`make golden` оценивает диалоги из `tests/golden.csv` активным чек-листом и сравнивает ответы модели с эталоном по каждому критерию. Перед запуском импортируйте датасет, содержащий эти ID (`make import-dev` для DEV). Команда печатает точность по критериям, общий процент и объяснения модели для несовпадений; код завершения `1` означает, что найдены расхождения. Разметка с доказательствами и заметками хранится отдельно в `tests/golden_notes.csv`.
+
+Для другого файла: `make golden FILE=tests/my_golden.csv`.
 
 ## Формат критерия
 

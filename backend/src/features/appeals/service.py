@@ -53,7 +53,7 @@ def appeal_view(appeal: dict[str, Any]) -> dict[str, Any]:
     checklist = db.get_checklist(evaluation["checklist_id"])["data"]
     conversation = db.get_conversation(evaluation["conversation_id"])
     others = [a for a in db.list_appeals(evaluation_id=evaluation["id"]) if a["id"] != appeal["id"]]
-    final = score_evaluation(checklist, apply_appeals(evaluation["answers"], others))
+    final = score_evaluation(checklist, apply_appeals(evaluation["answers"], others), conversation.get("channel"))
     item = next(i for i in final["criteria"] if i["id"] == appeal["criterion_id"])
     transcript = with_offsets(conversation["transcript"])
     return {
@@ -61,7 +61,12 @@ def appeal_view(appeal: dict[str, Any]) -> dict[str, Any]:
         "conversation_id": conversation["id"],
         "language": conversation["language"],
         "channel": conversation["channel"],
-        "criterion": _criterion(checklist, appeal["criterion_id"]),
+        "criterion": {**_criterion(checklist, appeal["criterion_id"]), **(
+            {"na_allowed": (conversation.get("channel") or "").strip().lower() == "voice call",
+             "na_condition": "Запись звонка явно начинается после начала разговора, поэтому приветствие могло не попасть в запись."
+             if (conversation.get("channel") or "").strip().lower() == "voice call" else ""}
+            if appeal["criterion_id"] == "c01_contact" else {}
+        )},
         "disputed": item,
         "total": final["total"],
         "fragment": _fragment(transcript, item),
@@ -72,9 +77,10 @@ def list_appeals(status_filter: str | None) -> list[dict[str, Any]]:
     return [appeal_view(a) for a in db.list_appeals(status=status_filter)]
 
 
-def _validate_new_answer(c: dict[str, Any], body: AppealResolve) -> dict[str, Any]:
+def _validate_new_answer(c: dict[str, Any], body: AppealResolve, channel: str | None = None) -> dict[str, Any]:
     if body.na:
-        if not c.get("na_allowed"):
+        allowed = ((channel or "").strip().lower() == "voice call") if c["id"] == "c01_contact" else bool(c.get("na_allowed"))
+        if not allowed:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Для {c['id']} N/A не допускается")
         return {"na": True, "value": None}
     allowed = [int(s["value"]) for s in c["scale"]] if c["type"] == "scale" else [0, 1]
@@ -91,19 +97,20 @@ def resolve_appeal(appeal_id: int, body: AppealResolve) -> dict[str, Any]:
         raise HTTPException(status.HTTP_409_CONFLICT, "Апелляция уже рассмотрена")
     evaluation = db.get_evaluation(appeal["evaluation_id"])
     checklist = db.get_checklist(evaluation["checklist_id"])["data"]
+    conversation = db.get_conversation(evaluation["conversation_id"])
 
     new_answer = None
     if body.decision == "changed":
         c = _criterion(checklist, appeal["criterion_id"])
-        new_answer = _validate_new_answer(c, body)
+        new_answer = _validate_new_answer(c, body, conversation.get("channel"))
         new_answer["explanation"] = f"Изменено по апелляции: {body.reason.strip()}"
         if c["type"] != "flag":
             new_answer["flags"] = []
 
     resolved = db.resolve_appeal(appeal_id, body.decision, body.reason.strip(), new_answer)
     appeals = db.list_appeals(evaluation_id=evaluation["id"])
-    original = score_evaluation(checklist, evaluation["answers"])
-    final = score_evaluation(checklist, apply_appeals(evaluation["answers"], appeals))
+    original = score_evaluation(checklist, evaluation["answers"], conversation.get("channel"))
+    final = score_evaluation(checklist, apply_appeals(evaluation["answers"], appeals), conversation.get("channel"))
     logger.info(
         "Appeal %s resolved: decision=%s total %s -> %s", appeal_id, body.decision, original["total"], final["total"]
     )

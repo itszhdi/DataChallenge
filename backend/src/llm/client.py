@@ -73,6 +73,25 @@ def extract_json(text: str) -> dict[str, Any]:
     return obj
 
 
+def is_daily_quota_error(body_text: str) -> tuple[bool, str]:
+    # Gemini's OpenAI-compatible endpoint may wrap error objects in a one-item array.
+    try:
+        payload = json.loads(body_text)
+    except ValueError:
+        return False, body_text[:1000]
+    if isinstance(payload, list):
+        payload = next((item for item in payload if isinstance(item, dict)), {})
+    if not isinstance(payload, dict):
+        return False, body_text[:1000]
+    error = payload.get("error", payload)
+    if not isinstance(error, dict):
+        return False, body_text[:1000]
+    message = str(error.get("message") or body_text[:1000])
+    status = str(error.get("status") or "").upper()
+    lower = message.lower()
+    return status == "RESOURCE_EXHAUSTED" and ("per day" in lower or "daily" in lower), message
+
+
 class LLMClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -85,9 +104,15 @@ class LLMClient:
             timeout=settings.llm_timeout_sec,
             max_retries=0,
         )
-        self.concurrency = max(1, settings.llm_concurrency)
-        self._min_interval_sec = settings.llm_min_interval_sec
-        self._semaphore = asyncio.Semaphore(self.concurrency)
+        self.fallback_client = None
+        if settings.llm_fallback_model and settings.llm_fallback_api_key:
+            self.fallback_client = AsyncOpenAI(
+                api_key=settings.llm_fallback_api_key,
+                base_url=settings.resolved_fallback_base_url,
+                timeout=settings.llm_timeout_sec,
+                max_retries=0,
+            )
+        self._semaphore = asyncio.Semaphore(max(1, settings.llm_concurrency))
         self._throttle_lock = asyncio.Lock()
         self._last_call = 0.0
 
@@ -100,9 +125,19 @@ class LLMClient:
 
     async def close(self) -> None:
         await self.client.close()
+        if self.fallback_client:
+            await self.fallback_client.close()
 
-    def cost_usd(self, prompt_tokens: int, completion_tokens: int) -> float:
-        price_in, price_out = (self.settings.llm_prices.get(self.model) or [0.0, 0.0])[:2]
+    def model_for_channel(self, channel: str | None) -> str:
+        normalized = (channel or "").strip().lower()
+        if ("call" in normalized or "звон" in normalized) and self.settings.llm_call_model:
+            return self.settings.llm_call_model
+        if "chat" in normalized and self.settings.llm_chat_model:
+            return self.settings.llm_chat_model
+        return self.model
+
+    def cost_usd(self, prompt_tokens: int, completion_tokens: int, model: str | None = None) -> float:
+        price_in, price_out = (self.settings.llm_prices.get(model or self.model) or [0.0, 0.0])[:2]
         return round((prompt_tokens * price_in + completion_tokens * price_out) / 1_000_000, 6)
 
     async def _throttle(self) -> None:
@@ -113,10 +148,13 @@ class LLMClient:
                 await asyncio.sleep(wait)
             self._last_call = time.monotonic()
 
-    def _request_kwargs(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> dict[str, Any]:
-        send_schema = gemini_schema(schema) if self.provider == "gemini" else schema
+    def _request_kwargs(
+        self, messages: list[dict[str, str]], schema: dict[str, Any], provider: str | None = None, model: str | None = None
+    ) -> dict[str, Any]:
+        provider = provider or self.provider
+        send_schema = gemini_schema(schema) if provider == "gemini" else schema
         kwargs: dict[str, Any] = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
             "temperature": 0,
             "response_format": {
@@ -124,15 +162,21 @@ class LLMClient:
                 "json_schema": {"name": "evaluation", "strict": True, "schema": send_schema},
             },
         }
-        if self.settings.llm_reasoning_effort:
+        if self.settings.llm_reasoning_effort and provider == "gemini":
             kwargs["reasoning_effort"] = self.settings.llm_reasoning_effort
         return kwargs
 
-    async def complete_json(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def complete_json(
+        self, messages: list[dict[str, str]], schema: dict[str, Any], channel: str | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         if self.provider == "gemini" and not self.settings.llm_api_key:
             raise LLMError("LLM_API_KEY не задан в .env", "llm_auth")
 
-        kwargs = self._request_kwargs(messages, schema)
+        active_client = self.client
+        active_provider = self.provider
+        active_model = self.model_for_channel(channel)
+        kwargs = self._request_kwargs(messages, schema, active_provider, active_model)
+        fallback_used = False
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         attempts, rate_limited, last_error, last_code = 0, 0, "", "llm_bad_answer"
         started = time.monotonic()
@@ -142,17 +186,61 @@ class LLMClient:
                 attempts += 1
                 await self._throttle()
                 try:
-                    resp = await self.client.chat.completions.create(**kwargs)
+                    resp = await active_client.chat.completions.create(**kwargs)
                 except openai.RateLimitError as e:
                     # ! 429 не тратит обычные попытки: ждём 15, 30, 45... с, максимум 5 раз
                     rate_limited += 1
                     attempts -= 1
+                    try:
+                        body_text = e.response.text
+                    except Exception:
+                        body_text = str(getattr(e, "body", "") or e)
+                    response_text = body_text[:1000]
+                    daily_quota_exhausted, provider_message = is_daily_quota_error(body_text)
+                    if daily_quota_exhausted:
+                        last_error = f"daily API quota exhausted: {provider_message}"
+                        logger.error(
+                            "LLM daily quota exhausted (429), provider=%s model=%s body=%s",
+                            active_provider, active_model, response_text,
+                        )
+                        if self.fallback_client and not fallback_used:
+                            fallback_used = True
+                            active_client = self.fallback_client
+                            active_provider = self.settings.llm_fallback_provider
+                            active_model = self.settings.llm_fallback_model
+                            kwargs = self._request_kwargs(messages, schema, active_provider, active_model)
+                            attempts = rate_limited = 0
+                            logger.warning("LLM daily quota exhausted; switching immediately to fallback model=%s", active_model)
+                            continue
+                        raise LLMError(f"LLM исчерпал дневную квоту (429): {provider_message}") from e
                     if rate_limited > RATE_LIMIT_ATTEMPTS:
-                        # ! Текст SDK не содержит причину лимита, она лежит в теле ответа
-                        last_error, last_code = f"rate limit: {e.body or e}", "llm_rate_limited"
+                        last_error = f"rate limit (429): {response_text}"
+                        if self.fallback_client and not fallback_used:
+                            fallback_used = True
+                            active_client = self.fallback_client
+                            active_provider = self.settings.llm_fallback_provider
+                            active_model = self.settings.llm_fallback_model
+                            kwargs = self._request_kwargs(messages, schema, active_provider, active_model)
+                            attempts = rate_limited = 0
+                            logger.warning("LLM primary exhausted 429 retries; switching to configured fallback model=%s", active_model)
+                            continue
+                        logger.error(
+                            "LLM 429 retry limit exhausted, provider=%s model=%s body=%s",
+                            active_provider, active_model, response_text,
+                        )
                         break
                     pause = RATE_LIMIT_BASE_PAUSE_SEC * rate_limited
-                    logger.warning("LLM rate limited (429), retry %d/%d in %ds", rate_limited, RATE_LIMIT_ATTEMPTS, pause)
+                    retry_after = None
+                    try:
+                        retry_after = float(e.response.headers.get("retry-after", ""))
+                    except (TypeError, ValueError, AttributeError):
+                        pass
+                    if retry_after is not None:
+                        pause = max(pause, retry_after)
+                    logger.warning(
+                        "LLM rate limited (429), provider=%s model=%s retry %d/%d in %ds body=%s",
+                        active_provider, active_model, rate_limited, RATE_LIMIT_ATTEMPTS, pause, response_text,
+                    )
                     await asyncio.sleep(pause)
                     continue
                 except (openai.APIConnectionError, openai.APITimeoutError, openai.InternalServerError) as e:
@@ -178,17 +266,18 @@ class LLMClient:
                     continue
 
                 meta = {
-                    "provider": self.provider,
-                    "model": self.model,
+                    "provider": active_provider,
+                    "model": active_model,
+                    "fallback_used": fallback_used,
                     "seconds": round(time.monotonic() - started, 2),
                     "attempts": attempts,
                     "rate_limited": rate_limited,
                     "tokens": usage,
-                    "cost_usd": self.cost_usd(usage["prompt_tokens"], usage["completion_tokens"]),
+                    "cost_usd": self.cost_usd(usage["prompt_tokens"], usage["completion_tokens"], active_model),
                 }
                 logger.info(
                     "LLM call ok: model=%s seconds=%.1f attempts=%d tokens_in=%d tokens_out=%d cost_usd=%.6f",
-                    self.model, meta["seconds"], attempts, usage["prompt_tokens"], usage["completion_tokens"], meta["cost_usd"],
+                    active_model, meta["seconds"], attempts, usage["prompt_tokens"], usage["completion_tokens"], meta["cost_usd"],
                 )
                 return data, meta
 
