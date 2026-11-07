@@ -1,5 +1,4 @@
 from typing import Annotated
-
 from fastapi import Depends, Request
 
 from src.config.settings import Settings
