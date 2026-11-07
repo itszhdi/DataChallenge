@@ -25,7 +25,7 @@ make test                    # тесты
 make docker-up               # то же в Docker (SQLite в volume)
 ```
 
-Swagger отключён намеренно. Фронтенд: откройте `../frontend/index.html` в браузере, адрес API по умолчанию `http://localhost:8000/api`.
+Swagger отключён намеренно. Запуск фронтенда описан в корневом `README.md`.
 
 ## .env
 
@@ -38,6 +38,7 @@ Swagger отключён намеренно. Фронтенд: откройте 
 | `LLM_MIN_INTERVAL_SEC` | Минимальная пауза между запросами (7 для бесплатного Gemini) |
 | `LLM_CONCURRENCY`, `LLM_RETRIES` | Параллелизм и повторы при битом JSON или ошибке сети. При 429 отдельно: паузы 15/30/45… с, до 5 раз |
 | `EXCLUDE_CHANNELS` | `["voice call"]`: реальные звонки не отправляются в бесплатный API (Google использует такие запросы для обучения) |
+| `CQA_TARGET_SCORE` | Целевой индекс качества на дашборде, по умолчанию 85 |
 | `LLM_PRICES` | `{"model": [$in, $out]}` за 1M токенов, чтобы посчитать стоимость одной оценки (токены пишутся в `meta` и в лог) |
 
 Примеры для Gemini и LM Studio есть в `.env.example`.
@@ -65,6 +66,7 @@ Swagger отключён намеренно. Фронтенд: откройте 
 | GET | `/appeals?status=open` | Очередь проверяющего: спорный критерий + фрагмент ±2 реплики |
 | POST | `/appeals/{id}/resolve` `{"decision":"upheld"\|"changed","reason","value","na"}` | Решение → `original_total`, `final_total` |
 | GET | `/analytics?dataset=` | Средний итог, разбивка по языкам/каналам/критериям, грубые ошибки, 5 худших |
+| GET | `/analytics/dashboard?dataset=` | Сводка для супервайзера: KPI, критерии, сегменты, распределение итогов и строки диалогов для drill-down |
 | GET | `/prompt/{conversation_id}` | Промпт и JSON-схема без вызова модели (отладка) |
 | GET | `/export?dataset=&team_name=&model_mode=&model_name=` | JSON с финальными оценками (с учётом апелляций) |
 | GET | `/audio/{conversation_id}` | Прокси записи звонка: достаёт mp3 со страницы организаторов, поддерживает Range (перемотка) |
@@ -105,5 +107,7 @@ src/
     checklists/     версии, валидация, diff по отпечатку критерия
     evaluation/     timing, prompt, scoring, service (оценка, валидация, reapply), jobs
     appeals/        подача, очередь, решение
-    analytics/      сводка
+    analytics/      сводка и дашборд супервайзера
+    audio/          прокси записей звонков
+    export/         выгрузка результатов в JSON
 ```

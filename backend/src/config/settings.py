@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # ! На бесплатном тарифе Google использует запросы для обучения — реальные звонки не отправляем
     exclude_channels: list[str] = ["voice call"]
 
+    # Целевой индекс качества на дашборде супервайзера
+    cqa_target_score: float = 85.0
+
     # $ за 1M токенов: {"model": [input, output]}; бесплатный тариф = 0
     llm_prices: dict[str, list[float]] = Field(default_factory=dict)
 

@@ -81,3 +81,13 @@ async def test_full_flow(client):
     analytics = (await client.get("/api/analytics")).json()
     assert analytics["evaluated"] == 1 and analytics["worst"][0]["total"] == r["final_total"]
     assert eid != new_eid
+
+    # * Дашборд: апелляция считается один раз, диалог попадает в drill-down
+    board = (await client.get("/api/analytics/dashboard")).json()
+    assert board["summary"]["total_evaluated"] == 1
+    assert board["appeals"] == {"filed": 1, "open": 0, "changed": 1, "changed_percent": 100.0}
+    assert sum(b["count"] for b in board["distribution"]) == 1
+    row = board["dialogs"][0]
+    assert row["conversation_id"] == "s-ru-001" and row["criteria"]["c04_consult"]["percent"] == 50.0
+    assert row["weak_criterion"] == "c04_consult" and board["bottleneck"]["criterion_id"] == "c04_consult"
+    assert "c08_gross" not in {c["id"] for c in board["criteria_averages"]}

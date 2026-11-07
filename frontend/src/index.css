@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Цвета бренда взяты с fbroker.kz; компоненты используют только эти токены */
+:root {
+  --canvas: #f7f8f9;
+  --surface: #ffffff;
+  --surface-muted: #f0f2f4;
+  --line: #e7e7ea;
+  --ink: #0d1a14;
+  --ink-muted: #5f6d7e;
+  --brand: #00b323;
+  --brand-hover: #009753;
+  --brand-text: #007f3f;
+  --brand-soft: #e3f7e8;
+  --on-brand: #0d1a14;
+  --warn: #ffa700;
+  --warn-text: #9a6500;
+  --warn-soft: #fff3da;
+  --danger: #e5484d;
+  --danger-text: #c62a2f;
+  --danger-soft: #fdeaea;
+  --info: #3586ea;
+  --info-text: #1f64bd;
+  --info-soft: #e6f0fd;
+  --glow-brand: color-mix(in srgb, var(--brand) 22%, transparent);
+  --glow-info: color-mix(in srgb, var(--info) 14%, transparent);
+  --glass: color-mix(in srgb, var(--surface) 62%, transparent);
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #0d1a14;
+  --surface: #15231c;
+  --surface-muted: #1d2c25;
+  --line: #323335;
+  --ink: #f3f5f4;
+  --ink-muted: #b2bcc8;
+  --brand: #00b323;
+  --brand-hover: #00cf60;
+  --brand-text: #00cf60;
+  --brand-soft: #123524;
+  --on-brand: #0d1a14;
+  --warn: #ffa700;
+  --warn-text: #ffc14d;
+  --warn-soft: #3a2c10;
+  --danger: #e5484d;
+  --danger-text: #ff8a8d;
+  --danger-soft: #3d1b1d;
+  --info: #3586ea;
+  --info-text: #7db4f5;
+  --info-soft: #16304f;
+  --glow-brand: color-mix(in srgb, var(--brand) 26%, transparent);
+  --glow-info: color-mix(in srgb, var(--info) 16%, transparent);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-text: var(--brand-text);
+  --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-text: var(--info-text);
+  --color-info-soft: var(--info-soft);
+}
+
+@layer base {
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+
+  /* Мягкий фон под стеклянными панелями: без него полупрозрачность не видна */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(60rem 42rem at 88% -8%, var(--glow-brand), transparent 70%),
+      radial-gradient(48rem 36rem at 2% 104%, var(--glow-info), transparent 70%),
+      radial-gradient(40rem 30rem at 40% 55%, var(--glow-brand), transparent 72%);
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+}
+
+.glass {
+  background-color: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+@keyframes sidebar-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+.sidebar-drawer[data-state="open"] {
+  animation: sidebar-in 0.2s ease-out;
+}
+
+@keyframes turn-flash {
+  from {
+    background-color: var(--brand-soft);
+    box-shadow: 0 0 0 2px var(--brand);
+  }
+}
+
+.turn-flash {
+  animation: turn-flash 1.6s ease-out;
+}
+
+/* Recharts: убираем рамку фокуса у столбцов при клике мышью */
+.recharts-surface:focus,
+.recharts-rectangle:focus {
+  outline: none;
+}
