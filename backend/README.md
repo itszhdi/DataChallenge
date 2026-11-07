@@ -1,14 +1,25 @@
 # CQA — бэкенд оценки качества диалогов
 
-FastAPI-сервис для кейса Freedom «Conversation Quality Analytics». Он оценивает работу оператора контакт-центра по настраиваемому чек-листу через LLM (Gemini или локальная модель) и поддерживает апелляции и аналитику.
+FastAPI-сервис для кейса Freedom «Conversation Quality Analytics». Оценивает работу оператора контакт-центра по настраиваемому чек-листу через LLM: облачную Gemini или локальную модель в LM Studio. Умеет пакетную оценку и авторежим, апелляции, аналитику, экспорт и распознавание записей звонков.
 
 ## Главный принцип: модель отвечает, код считает
 
-- Модель только отвечает на вопросы чек-листа: `na`, `value`, `explanation`, `evidence_ids`, `checked_range`, `flags`.
+- Модель только отвечает на вопросы чек-листа: `na`, `value`, `explanation`, `evidence_ids`, `quote`, `checked_range`, `flags`.
 - В БД хранятся **ответы**, а не баллы. Баллы, перераспределение N/A, секции и итог каждый раз заново считает `score_evaluation()` (`src/features/evaluation/scoring.py`, Decimal + ROUND_HALF_UP).
 - Смена **веса** → новая версия чек-листа и пересчёт **без вызова модели**.
-- Изменение **формулировки / шкалы / N/A / пояснения** или **новый** критерий → модель переоценивает **только эти критерии**, остальные ответы копируются.
+- Изменение **названия / формулировки / шкалы / N/A / пояснения** или **новый** критерий → модель переоценивает **только эти критерии**, остальные ответы копируются. Смена порога первой реакции переоценивает только критерии с `uses_timing` (по умолчанию c06).
 - Решение по **апелляции** → пересчёт без модели. В карточке видны исходная (`original`) и финальная (`final`) оценка.
+
+### Порядок расчёта
+1. N/A засчитывается только там, где `na_allowed` и выполнено условие. N/A на запрещённом критерии считается «Нет» и даёт предупреждение.
+2. `binary`: «Да» — полный вес, «Нет» — 0. `scale`: вес × ступень / верхняя ступень. Значение не из шкалы приводится к ближайшей ступени.
+3. Критерии с N/A исключаются, их вес пропорционально перераспределяется на остальные. Максимум всегда 100.
+4. Итог округляется до 2 знаков. Если применимых критериев с весом нет, итог `null`. Грубые ошибки (`flag`) отмечаются отдельно и баллов не дают.
+5. Критерий без ответа модели исключается, итог помечается как предварительный (`preliminary`).
+
+Сумма баллов по секциям может отличаться от итога на 0.01: каждый балл округляется отдельно.
+
+**Первая реакция (порог 3 мин)** считается от подключения оператора, то есть от системного события «Эскалация на оператора» / «Chat transferred to an agent» / «Агент присоединился…». Время общения клиента с ботом в неё не входит. Паузы клиент→оператор учитываются только после подключения. Факты о времени вычисляет код (`timing.py`) и передаёт модели готовыми.
 
 ## Установка и запуск
 
@@ -18,63 +29,156 @@ make install                 # uv sync
 cp .env.example .env         # вписать DATASET_API_URL и LLM_API_KEY
 make run                     # http://localhost:8000/api/health
 make import-dev              # импорт DEV из API организаторов
-make eval ID=p1-ru-001       # оценить один диалог
-make batch DATASET=DEV       # пакетная оценка в фоне → job id
-make job JOB=<id>            # прогресс
-make test                    # тесты
-make docker-up               # то же в Docker (SQLite в volume)
+make eval ID=DEV:p1-ru-001   # оценить один диалог
+make test                    # автотесты
+make docker-up               # то же в Docker (SQLite в volume, results/ примонтирована)
 ```
 
 Swagger отключён намеренно. Фронтенд: откройте `../frontend/index.html` в браузере, адрес API по умолчанию `http://localhost:8000/api`.
+
+**После обновления схемы БД** старая `cqa.sqlite3` не запустится: в логе будет `schema ... outdated`. Пересоздайте базу: `make clean-db && make run`, затем снова импортируйте данные.
+
+## Модели
+
+Есть два профиля, переключаются на лету без рестарта: `make use-gemini` / `make use-local` или `PATCH /api/settings {"llm_profile": ...}`. Выбор хранится в БД. В каждой оценке записано, каким профилем и моделью она сделана. `make models` проверяет доступность обоих профилей.
+
+| Профиль | Что это | Настройки |
+|---|---|---|
+| `gemini` | Gemini через OpenAI-совместимый endpoint (или любой другой провайдер в `LLM_*`) | `LLM_API_KEY`, `LLM_MODEL`, `LLM_REASONING_EFFORT=low`, `LLM_MIN_INTERVAL_SEC=7` |
+| `local` | LM Studio на `localhost:1234` | `LOCAL_LLM_MODEL`, `LOCAL_LLM_REASONING_EFFORT=none`, `LOCAL_LLM_MAX_TOKENS=3000` |
+
+**Лимиты Gemini free.** 20 запросов **в день** на каждую модель (у каждой модели своя квота) и несколько в минуту. Чат — 1 запрос, звонок — 2 (распознавание + оценка). Минутные 429 бэкенд пережидает паузами 15/30/45… с. Дневной лимит сразу возвращает ошибку «Дневная квота … исчерпана», текст ответа Google пишется в лог. Обойти лимит можно так: сменить `LLM_MODEL` на другую модель (например, `gemini-3.7-flash`), переключиться на `local` или подключить платный тариф.
+
+**Локальная модель (Qwen3.5 9B на RTX 4050 6 ГБ):**
+```bash
+lms get qwen/qwen3.5-9b@q4_k_m
+lms server start
+lms load qwen/qwen3.5-9b --context-length 16384 --parallel 1   # без --gpu max: иначе нехватка VRAM
+make models && make use-local
+```
+- `LOCAL_LLM_REASONING_EFFORT=none` обязателен. Иначе Qwen3.5 «размышляет» тысячами токенов до JSON, и один диалог занимает 6+ минут. LM Studio понимает только этот способ, `/no_think` и `chat_template_kwargs` он игнорирует. С `none` диалог занимает ~1,5 мин (≈5,8 тыс. токенов на вход, ≈1,3 тыс. на выход).
+- Ответ, упёршийся в `LOCAL_LLM_MAX_TOKENS`, сразу считается ошибкой. После таймаута локальная модель не перезапрашивается.
+- ! Если `LOCAL_LLM_MODEL` указан с опечаткой, LM Studio не вернёт ошибку, а молча ответит загруженной моделью, и в оценке будет записано неверное имя. Проверяйте `make models`: там должно быть `model_loaded: true`.
+
+## Режимы анализа
+
+- **Ручной** (по умолчанию): одиночная оценка, пакет (`make batch DATASET=DEV`) или переоценка (`MODE=reapply`).
+- **Автоматический**: фоновый воркер по одному берёт **неоценённые** диалоги и оценивает активной моделью.
+  ```bash
+  make auto-on SORT=size_asc CALLS=last   # SORT: date_asc|date_desc|size_asc|size_desc; CALLS: mixed|first|last
+  make worker                              # состояние: running / paused / idle
+  make auto-off
+  ```
+  - `date` — дата импорта и порядок записи в наборе (у чатов другой даты нет), `size` — число реплик. `auto_dataset` ограничивает воркер одним набором.
+  - Пока идёт ручной пакет, воркер стоит на паузе, чтобы не делить лимиты модели.
+  - Упавшие и пропущенные диалоги воркер **не повторяет**: только ручной Retry.
+  - ** Устаревшие оценки (после смены чек-листа) воркер тоже не трогает: в MVP они переоцениваются вручную (`make batch MODE=reapply` или кнопка «Применить к диалогам»). Это экономит запросы к модели и упрощает тесты.
+
+**Статусы.** У каждого диалога есть статус `queued | running | done | failed | skipped` с источником (`manual | batch | auto`), текстом ошибки и числом попыток. Статусы хранятся в БД, поэтому видны после перезагрузки страницы. Если сервер упал посреди анализа, при старте такие диалоги получают `failed` «сервер перезапущен». `make queue` показывает, что в работе, что в очереди и что упало, с ETA по каждому диалогу и общим. ETA считается по средней длительности последних 20 оценок текущей модели. `make retry-failed` повторяет только упавшие.
+
+**Неоцениваемые диалоги.** Пустой транскрипт или диалог без реплик оператора в модель не отправляются: одиночная оценка отвечает 422, в пакете и воркере диалог получает `skipped`.
+
+## Данные
+
+- **Импорт**: по `group_id` (к `DATASET_API_URL` из `.env`), по полной `https://` ссылке или JSON-файлом (`make upload FILE=... DATASET=NAME`). Подходит полный ответ API, `{"records": [...]}` или голый список.
+- **Внутренний id** = `НАБОР:исходный_id` (`DEV:p1-ru-001`): одинаковые id из разных наборов не перезаписывают друг друга. Исходный id хранится в `source_id` и уходит в экспорт. Эндпоинты принимают и исходный id, если он встречается только в одном наборе.
+- **Грязные данные не роняют импорт.** Запись отбрасывается только без `conversation_id` или если `transcript` не список. Остальное нормализуется:
+  - вложения и лишние поля → маркер `[вложение: image screen.png]` (в оценку не входят);
+  - `null`/объект/число в тексте → строка или маркер;
+  - числовое время → `MM:SS`;
+  - синонимы ролей (`agent`→`operator`, `customer`→`client`), нераспознанная роль → `unknown` + `speaker_raw`;
+  - текст длиннее 4000 символов обрезается.
+
+  Всё это перечисляется в `warnings` ответа импорта.
+
+## Звонки: своё распознавание (Gemini)
+
+Транскрипт звонков в DEV сделан с ошибками, поэтому звонок можно оценивать по своему распознаванию. Настройка `call_transcript`: `asr` (по умолчанию) или `original`. Если у записи в датасете нет транскрипта, используется распознанный при любой настройке.
+
+- При оценке звонка бэкенд скачивает запись (`audio_url` → HTML-страница → mp3 в Dynamics) и отправляет её в `TRANSCRIBE_MODEL` (по умолчанию `gemini-3.8-flash`). В ответ приходят реплики с ролями `bot | operator | client` и временем. 6,5-минутный звонок распознаётся за ~1–2,5 мин, ≈16 тыс. токенов.
+- Файл записи начинается с события «Запись и транскрибирование запущены». Реплики до него (обычно приветствие оператора) берутся из транскрипта датасета с пометкой `pre_recording`. Паузы записи («приостановлены/возобновлены») учитываются при выравнивании времени. Системные события переносятся из оригинала.
+- Персональные данные маскируются так же, как в датасете банка: `[Персональные данные скрыты]`, `[Имя скрыто]`.
+- Свой транскрипт хранится рядом с оригинальным (`transcript_asr`). В оценке сохраняется снимок использованного транскрипта, чтобы номера `#N` в карточке и апелляциях совпадали с ответом модели.
+- `make transcribe ID=DEV:p4-ru-002` распознаёт запись заново.
+
+## Экспорт
+
+В отчёт входят **все** диалоги набора. У каждого есть `status`: `ok` / `partial` (есть оценка), `failed` / `skipped` (с `reason`), `excluded` (канал из `EXCLUDE_CHANNELS`) или `pending` (ещё не оценён). Сводка по статусам — в `counts`.
+
+- Скачать: `GET /api/export?dataset=DEV&team_name=...&download=true` (браузер сохраняет файл).
+- Сохранить на сервере: `make save-results DATASET=DEV TEAM=...` (`POST /api/export/save`) → `results/DEV_<время>.json` и `results/DEV_latest.json` в корне проекта (`RESULTS_DIR`).
 
 ## .env
 
 | Переменная | Назначение |
 |---|---|
-| `DATASET_API_URL` | Ссылка организаторов **без** `&group_id`. Бэкенд сам дописывает его строкой, чтобы не потерять подпись `sig` |
-| `LLM_PROVIDER` | `gemini` или `openai` (LM Studio и любой OpenAI-совместимый сервер) |
-| `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` | Доступ к модели |
-| `LLM_REASONING_EFFORT` | `low` для Gemini; пусто для моделей без reasoning |
-| `LLM_MIN_INTERVAL_SEC` | Минимальная пауза между запросами (7 для бесплатного Gemini) |
-| `LLM_CONCURRENCY`, `LLM_RETRIES` | Параллелизм и повторы при битом JSON или ошибке сети. При 429 отдельно: паузы 15/30/45… с, до 5 раз |
-| `EXCLUDE_CHANNELS` | `["voice call"]`: реальные звонки не отправляются в бесплатный API (Google использует такие запросы для обучения) |
-| `LLM_PRICES` | `{"model": [$in, $out]}` за 1M токенов, чтобы посчитать стоимость одной оценки (токены пишутся в `meta` и в лог) |
+| `DATASET_API_URL` | Ссылка организаторов **без** `&group_id`. Бэкенд дописывает его строкой, чтобы не потерять подпись `sig` |
+| `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` | Профиль `gemini`: `gemini` или `openai` (любой OpenAI-совместимый сервер) |
+| `LLM_REASONING_EFFORT`, `LLM_MIN_INTERVAL_SEC`, `LLM_CONCURRENCY`, `LLM_RETRIES` | Reasoning, пауза между запросами, параллелизм, повторы при битом JSON или ошибке сети |
+| `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL`, `LOCAL_LLM_REASONING_EFFORT`, `LOCAL_LLM_MAX_TOKENS`, `LOCAL_LLM_TIMEOUT_SEC` | Профиль `local` (LM Studio) |
+| `DEFAULT_LLM_PROFILE` | Профиль при первом запуске (дальше хранится в БД) |
+| `TRANSCRIBE_MODEL`, `TRANSCRIBE_REASONING_EFFORT`, `TRANSCRIBE_TIMEOUT_SEC`, `TRANSCRIBE_MAX_AUDIO_MB` | Распознавание звонков (ключ из `LLM_API_KEY`) |
+| `EXCLUDE_CHANNELS` | Каналы, которые не отправляются в модель. По умолчанию `[]`: данные банка разрешено использовать |
+| `WORKER_INTERVAL_SEC` | Пауза между шагами авто-воркера (5 с) |
+| `RESULTS_DIR`, `DB_PATH` | Папка отчётов (по умолчанию `../results`) и файл БД |
+| `LLM_PRICES` | `{"model": [$in, $out]}` за 1M токенов, для расчёта стоимости оценки (токены пишутся в `meta` и в лог) |
 
-Примеры для Gemini и LM Studio есть в `.env.example`.
+## Make
+
+| Команда | Что делает |
+|---|---|
+| `install`, `run`, `test`, `clean-db` | Зависимости, сервер с `--reload`, автотесты, удаление БД |
+| `import-dev`, `upload FILE= DATASET=` | Импорт DEV / файла |
+| `eval ID=`, `batch DATASET= MODE= ONLY_MISSING=`, `retry-failed` | Одиночная, пакетная оценка, повтор упавших |
+| `job JOB=`, `jobs`, `queue DATASET=`, `worker` | Прогресс задачи, список задач, очередь с ETA, состояние воркера |
+| `auto-on SORT= CALLS=`, `auto-off` | Авторежим |
+| `settings`, `models`, `use-gemini`, `use-local` | Настройки, проверка моделей, переключение профиля |
+| `transcribe ID=` | Распознать запись звонка заново |
+| `save-results DATASET= TEAM=` | Отчёт в `results/` |
+| `analytics` | Сводка |
+| `docker-build`, `docker-up`, `docker-down`, `docker-logs` | Docker |
 
 ## API (префикс `/api`)
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| GET | `/health` | Провайдер и модель |
+| GET | `/health` | Активный профиль, провайдер, модель |
+| GET / PATCH | `/settings` | `auto_mode`, `auto_sort`, `auto_calls`, `auto_dataset`, `llm_profile`, `call_transcript` + описание профилей |
+| GET | `/settings/models` | Доступность профилей (ключ Gemini, запущен ли LM Studio, загружена ли модель) |
+| GET | `/worker` | Состояние авто-воркера |
 | GET | `/datasets` | Загруженные наборы |
-| POST | `/datasets/import` `{"group_id":"DEV"}` или `{"url":"https://..."}` | Импорт из API организаторов (по group_id или по полной ссылке) |
-| POST | `/datasets/upload?dataset=` (multipart `file`) | Импорт из JSON-файла того же формата |
-| GET | `/conversations?dataset=` | Список: язык, канал, последняя оценка, итог, грубые ошибки, открытые апелляции |
-| GET | `/conversations/{id}` | Диалог (`index`, `offset_sec` у реплик) и история оценок |
+| POST | `/datasets/import` `{"group_id":"DEV"}` или `{"url":"https://..."}` | Импорт из API организаторов |
+| POST | `/datasets/upload?dataset=` (multipart `file`) | Импорт из JSON-файла |
+| GET | `/conversations?dataset=` | Список: итог, грубые ошибки, апелляции, статус анализа, ETA |
+| GET | `/conversations/{id}` | Диалог (`index`, `offset_sec`), свой транскрипт звонка, история оценок |
+| POST | `/conversations/{id}/transcribe` | Распознать запись заново |
 | GET | `/checklists`, `/checklists/active`, `/checklists/{id}` | Версии чек-листа |
-| POST | `/checklists` `{"data":{...},"comment":""}` | Новая активная версия + `diff` с предыдущей |
-| PATCH | `/checklists/active/weights` `{"weights":{"c01_contact":30},"reapply_all":true}` | Новые веса + пересчёт без модели |
+| POST | `/checklists` `{"data":{...},"comment":""}` | Новая активная версия + `diff` с предыдущей (`needs_llm`, `threshold_changed`) |
+| PATCH | `/checklists/active/weights` `{"weights":{"c01_contact":30}}` | Новые веса + пересчёт без модели |
 | POST | `/checklists/{id}/activate` | Сделать версию активной |
-| POST | `/evaluate` `{"conversation_id":"..."}` | Оценить диалог, вернуть карточку |
-| POST | `/evaluate/batch` `{"dataset":"DEV","conversation_ids":null,"mode":"evaluate"\|"reapply","only_missing":false}` | Пакетная обработка в фоне |
-| GET | `/jobs/{id}` | Прогресс: `total`, `processed`, `done`, `failed`, `skipped` |
-| GET | `/evaluations/{id}` | Карточка: `original`, `final`, `meta`, `appeals`, `conversation` |
-| POST | `/evaluations/{id}/reapply` | Применить активный чек-лист (LLM только для изменённых критериев) |
+| POST | `/evaluate` `{"conversation_id":"..."}` | Оценить диалог, вернуть карточку (422 — оценивать нечего) |
+| POST | `/evaluate/batch` `{"dataset","conversation_ids","mode":"evaluate"\|"reapply","only_missing","only_failed"}` | Пакет в фоне |
+| GET | `/jobs?active=`, `/jobs/{id}` | Задачи пакетной оценки |
+| GET | `/queue?dataset=` | Очередь: running / queued / upcoming (авто) / failed, ETA, состояние воркера |
+| GET | `/evaluations/{id}` | Карточка: `original`, `final`, `meta`, `appeals`, `conversation` (транскрипт, по которому оценивала модель) |
+| POST | `/evaluations/{id}/reapply` | Применить активный чек-лист (модель только по изменённым критериям) |
 | POST | `/evaluations/{id}/appeals` `{"criterion_id","comment"}` | Подать апелляцию |
 | GET | `/appeals?status=open` | Очередь проверяющего: спорный критерий + фрагмент ±2 реплики |
 | POST | `/appeals/{id}/resolve` `{"decision":"upheld"\|"changed","reason","value","na"}` | Решение → `original_total`, `final_total` |
 | GET | `/analytics?dataset=` | Средний итог, разбивка по языкам/каналам/критериям, грубые ошибки, 5 худших |
 | GET | `/prompt/{conversation_id}` | Промпт и JSON-схема без вызова модели (отладка) |
-| GET | `/export?dataset=&team_name=&model_mode=&model_name=` | JSON с финальными оценками (с учётом апелляций) |
-| GET | `/audio/{conversation_id}` | Прокси записи звонка: достаёт mp3 со страницы организаторов, поддерживает Range (перемотка) |
+| GET | `/export?dataset=&team_name=&model_mode=&model_name=&download=` | Отчёт по всем диалогам |
+| POST | `/export/save?...` | Сохранить отчёт в `results/` |
+| GET | `/audio/{conversation_id}` | Прокси записи звонка с поддержкой Range (перемотка) |
+
+**Апелляции при повторной оценке и reapply.** Открытые переезжают на новую оценку. Решённые копируются, если критерий не менялся. Если менялся, апелляция снова открывается с пометкой «пересмотрите».
 
 ### Сценарий защиты: заменить критерий
-1. `GET /checklists/active` → изменить `rule`/`scale` критерия или добавить новый → `POST /checklists`. В ответе `diff.needs_llm` показывает, какие критерии уйдут в модель.
-2. `POST /evaluate/batch {"dataset":"DEV","mode":"reapply"}`. Модель вызывается только по изменённым критериям.
+1. `GET /checklists/active` → изменить `rule`/`scale`/`title` критерия или добавить новый → `POST /checklists`. `diff.needs_llm` показывает, какие критерии уйдут в модель.
+2. `make batch DATASET=DEV MODE=reapply`. Модель вызывается только по изменённым критериям, решения апелляций по неизменным сохраняются.
 
 ### Контрольный набор организаторов
-`POST /datasets/import {"group_id":"<новый>"}`, затем `POST /evaluate/batch {"dataset":"<новый>"}`.
+`POST /datasets/import {"group_id":"<новый>"}`, затем `make batch DATASET=<новый>` или авторежим с `auto_dataset`, и в конце `make save-results DATASET=<новый> TEAM=...`.
 
 ## Формат критерия
 
@@ -83,27 +187,30 @@ Swagger отключён намеренно. Фронтенд: откройте 
  "type": "binary | scale | flag", "weight": 20, "na_allowed": true,
  "na_condition": "Чат закончился до того, как клиент сформулировал запрос.",
  "rule": "...", "scale": [{"value": 20, "description": "..."}],
- "guidance": "пояснение для модели", "examples_pass": [], "examples_fail": [], "flag_types": []}
+ "guidance": "пояснение для модели", "examples_pass": [], "examples_fail": [], "flag_types": [],
+ "uses_timing": false}
 ```
 
-- `binary`: «Да» даёт полный вес, «Нет» — 0.
-- `scale`: баллы = вес × ступень / верхняя ступень. Значение не из шкалы приводится к ближайшей ступени.
-- `flag`: баллов не даёт, попадает в `gross_errors`.
-- N/A исключает критерий, его вес перераспределяется на остальные, максимум всегда 100. Если применимых критериев нет, итог `null`.
-
-Начальный чек-лист: `checklists/default_checklist.json`. Он записывается в БД при первом запуске.
+Начальный чек-лист: `checklists/default_checklist.json`. Он записывается в БД при первом запуске. В `settings` лежат `first_response_threshold_sec` (180) и `rounding` (2).
 
 ## Структура
 
 ```
 src/
-  main.py, router.py, dependencies.py, db.py (весь SQL), config/settings.py
-  llm/client.py                       # Gemini / OpenAI-совместимый, троттлинг, 429, токены
+  main.py (lifespan: БД, профили моделей, авто-воркер), router.py, dependencies.py, db.py (весь SQL), config/settings.py
+  llm/client.py, llm/prompts.py      # клиент (профили, 429, дневная квота, max_tokens) и промпт/схема
   features/
-    datasets/       импорт API/файла
-    conversations/  список и карточка диалога
+    datasets/       импорт API/файла, нормализация реплик (utils.py)
+    conversations/  список, карточка диалога, распознавание звонка
     checklists/     версии, валидация, diff по отпечатку критерия
-    evaluation/     timing, prompt, scoring, service (оценка, валидация, reapply), jobs
+    evaluation/     timing, scoring, service (оценка, статусы, reapply, перенос апелляций), queue (ETA), jobs
+    settings/       настройки приложения в БД
+    worker/         авто-воркер
+    transcription/  распознавание записей звонков через Gemini
     appeals/        подача, очередь, решение
     analytics/      сводка
+    export/         отчёт и сохранение в results/
+    audio/          прокси записи звонка
 ```
+
+Изменения API для фронтенда описаны в `changes.md`.

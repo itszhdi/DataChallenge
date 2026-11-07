@@ -1,6 +1,12 @@
 # Изменения API для фронтенда
 
-Этот файл — задание для отдельной доработки `frontend/`. Каждый блок можно отдать Claude Code целиком: «Внедри во frontend изменения из backend/changes.md, раздел N».
+Этот файл — задание для отдельной доработки `frontend/`. Каждый блок можно отдать Claude Code целиком: «Внедри во frontend изменения из backend/changes.md, раздел N». Поля сверены с работающим API (ветка `data_and_conv_branch`).
+
+**Порядок внедрения:** раздел 1 обязателен первым (меняется формат id), затем 3 → 4 (статусы и авторежим), 5 (экспорт), 2 и 6 — по желанию. Бэкенд обратно совместим: текущий фронт продолжает работать, просто не показывает новое.
+
+**Общие правила**
+- Все новые тексты ошибок приходят в `detail` (строка). 422 — ошибка данных или нельзя оценить, 502 — модель недоступна (текст причины в `detail`).
+- Долгие операции (оценка звонка, распознавание) могут идти минуты: не ставить на fetch таймаут меньше 10 мин, показывать статус из `/api/queue`.
 
 ## 1. Внутренний id диалога = `НАБОР:исходный_id`
 
@@ -40,19 +46,19 @@
 ## 3. Настройки, выбор модели, статусы анализа, ETA, Retry
 
 **Новые эндпоинты**
-- `GET /api/settings` → `{auto_mode, auto_sort, auto_dataset, llm_profile, profiles: {gemini: {provider, model, active}, local: {provider, model, base_url, active}}}`.
+- `GET /api/settings` → `{auto_mode, auto_sort, auto_calls, auto_dataset, llm_profile, call_transcript, profiles: {gemini: {provider, model, base_url: null, active}, local: {provider, model, base_url, active}}}` (`auto_calls` — раздел 4, `call_transcript` — раздел 6).
 - `PATCH /api/settings`: любое подмножество полей:
   - `auto_mode: bool` — ручной или автоматический режим;
   - `auto_sort: "date_asc" | "date_desc" | "size_asc" | "size_desc"` — дата импорта или число реплик;
   - `auto_dataset: string | null` — null означает все наборы;
   - `llm_profile: "gemini" | "local"` — применяется сразу, без рестарта.
   Неверное значение → 422.
-- `GET /api/settings/models` — проверка профилей: `{gemini: {model, available, ...}, local: {model, available, model_loaded, models[], error?}}`. Нужна для подсказки «LM Studio не запущен» или «модель не загружена».
+- `GET /api/settings/models` — проверка профилей: `{gemini: {...}, local: {...}}`, у каждого `{model, available, model_loaded, models[]}`, а при недоступности `{model, available: false, error}`. Нужна для подсказки «LM Studio не запущен» (`available: false`) или «модель не загружена / неверное имя» (`model_loaded: false`: LM Studio в этом случае молча отвечает другой загруженной моделью).
 - `GET /api/queue?dataset=` → `{model: {profile, name, avg_eval_sec, workers}, running: [...], queued: [...], upcoming: [...], failed: [...], counts: {...}, eta_total_sec}`:
   - в каждом элементе есть `conversation_id`, `source_id`, `dataset`, `source` (`manual|batch|auto`), `error`, `attempts`, `eta_sec`;
   - в `running` дополнительно есть `elapsed_sec`, в `queued`/`upcoming` — `position`;
   - `upcoming` — следующие диалоги авто-воркера (появятся в разделе 4).
-- `GET /api/jobs?active=true` — задачи пакетной оценки (последние 20 или только активные). Нужен для восстановления прогресса после F5.
+- `GET /api/jobs?active=true` — задачи пакетной оценки (последние 20 или только активные): `{id, kind, status: running|finished, total, processed, model, done[], failed[], skipped[], created_at, finished_at}`. Нужен для восстановления прогресса пакета после F5. ! Задачи хранятся в памяти сервера: после рестарта список пуст. Статусы диалогов при этом не теряются, они в БД (`/api/conversations`, `/api/queue`).
 - `POST /api/evaluate/batch` принимает `only_failed: true` — повтор только упавших (кнопка Retry). Диалоги, уже стоящие в очереди или в работе, повторно не ставятся.
 - `GET /api/health` → `{status, profile, provider, model}`.
 
@@ -72,7 +78,7 @@
 - Список диалогов: в каждой строке бейдж статуса (в очереди №N / анализируется · ~Xс / ошибка / пропущен) и иконка ошибки с `status_error` во всплывающей подсказке. У `failed` кнопка «Повторить» → `POST /api/evaluate {conversation_id}`.
 - Общий статус-бар над списком при `counts.running + counts.queued + counts.upcoming > 0`: «Анализ: X в работе, Y в очереди, ~Z мин (модель …)». При `counts.failed > 0` кнопка «Повторить упавшие (N)» → `POST /evaluate/batch {only_failed: true}`.
 - Опрос `GET /api/queue` и `GET /api/conversations` каждые 2–3 с, пока есть running/queued или включён авторежим, иначе раз в 15–30 с.
-- При загрузке страницы: `GET /api/jobs?active=true` → если есть задача, показать её прогресс (вместо хранения `R.job` в памяти).
+- При загрузке страницы: `GET /api/jobs?active=true` → если есть задача, показать её прогресс (вместо хранения `R.job` в памяти). Состояние отдельных диалогов брать из `GET /api/queue` и полей `status*` в списке: они переживают и F5, и рестарт сервера.
 - Если у ручного «Оценить» статус ответа ≠ 200, сразу показать ошибку в строке диалога (бэкенд уже записал `failed`).
 
 ## 4. Авто-воркер
@@ -129,7 +135,7 @@
 - При оценке звонка распознавание запускается автоматически, если своего транскрипта ещё нет. Это входит в статус `running`, поэтому оценка звонка длится несколько минут.
 - `POST /api/conversations/{id}/transcribe` — распознать заново (принудительно).
 - `GET /api/conversations/{id}` → `transcript_asr` (с `index`/`offset_sec`) и `asr_meta`. В списке новое поле `asr_messages` (null, если не распознан).
-- Карточка оценки: `conversation.transcript` — **тот транскрипт, по которому оценивала модель** (номера `#N` совпадают с доказательствами). `conversation.transcript_source` равен `asr` или `original`.
+- Карточка оценки: `conversation.transcript` — **тот транскрипт, по которому оценивала модель** (номера `#N` совпадают с доказательствами). `conversation.transcript_source` равен `asr` или `original`. Снимок транскрипта хранится в оценке, в `meta` карточки его нет, а `conversation.transcript_asr` в карточку не попадает (он есть в `GET /conversations/{id}`).
 - `EXCLUDE_CHANNELS` по умолчанию пустой: звонки теперь оцениваются.
 
 **Что сделать во фронте**
