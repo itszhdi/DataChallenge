@@ -1,331 +1,367 @@
+/* CQA · фронтенд. Все данные, оценки, баллы, апелляции и чек-листы живут на бэкенде (FastAPI, /api).
+ * В localStorage хранятся только настройки интерфейса. */
 (function () {
-  const KEY = 'cqa-state-v1';
+  const KEY = 'cqa-state-v2';
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clone = (o) => JSON.parse(JSON.stringify(o));
-  const fmt = (n) => (n === null || n === undefined ? '—' : (Math.round(n * 100) / 100).toString());
+  const fmt = (n) => (n === null || n === undefined ? '—' : String(Math.round(n * 100) / 100));
+  const mmss = (t) => (t === null || t === undefined ? '—' : String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(Math.floor(t % 60)).padStart(2, '0'));
+  const dt = (s) => (s ? new Date(s).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '');
+  const cls = (v) => (v === null || v === undefined ? '' : v >= 80 ? 'hi' : v >= 55 ? 'mid' : 'lo');
 
+  const DEFAULTS = { backendUrl: 'http://localhost:8000/api', dataset: '', importGroup: 'DEV', importUrl: '', exportMeta: { teamName: '', modelMode: '', modelName: '' }, audioShift: {}, appealFilter: 'open', ui: { view: 'dialogs' } };
   let S;
-  try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
-  if (!S) S = { records: [], checklists: [clone(window.DEFAULT_CHECKLIST)], activeCl: 'cl-default', results: {}, appeals: [], endpoint: '', apiUrl: '', backendUrl: 'http://localhost:8000/api', dataset: 'DEV', exportMeta: { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' }, ui: { view: 'dialogs' } };
-  S.backendUrl = S.backendUrl || 'http://localhost:8000/api'; S.dataset = S.dataset || 'DEV';
-  S.exportMeta = S.exportMeta || { teamName: 'Название команды', modelMode: 'local', modelName: 'Название модели' };
+  try { S = { ...clone(DEFAULTS), ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch (e) { S = clone(DEFAULTS); }
   S.ui = S.ui || { view: 'dialogs' };
-  let draft = null;
+  try { localStorage.removeItem('cqa-state-v1'); } catch (e) {} // старое демо-состояние
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
-  const activeCl = () => S.checklists.find((c) => c.id === S.activeCl) || S.checklists[0];
-  const rec = (id) => S.records.find((r) => r.conversation_id === id);
-  function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
 
-  /* ---------- вспомогательное ---------- */
-  const cls = (v) => (v === null ? '' : v >= 80 ? 'hi' : v >= 55 ? 'mid' : 'lo');
-  const REL = new WeakMap(); // реплика → секунды от начала звонка (исходная метка остаётся в title)
-  const mmss = (t) => String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(Math.floor(t % 60)).padStart(2, '0');
-  const indexRecords = () => S.records.forEach((r) => { if (r.channel === 'voice call' && r.transcript.length) { const t0 = Date.parse(r.transcript[0].timestamp); r.transcript.forEach((m) => REL.set(m, Math.max(0, (Date.parse(m.timestamp) - t0) / 1000))); } });
-  const tsView = (m) => (REL.has(m) && isFinite(REL.get(m)) ? mmss(REL.get(m)) : m.timestamp);
-  const SHIFT_DEFAULT = -3; // метка реплики = момент получения распознанной фразы, сама фраза звучала раньше
-  const shiftOf = (id) => ((S.audioShift || {})[id] ?? SHIFT_DEFAULT);
-  const offsetSec = (r, i) => (r.channel === 'voice call' ? (REL.get(r.transcript[i]) || 0) : 0);
-  const ansLabel = (c, a) => {
-    if (a === 'na' || a === undefined) return 'N/A';
-    if (c.type === 'scale') return `${a} / ${Scoring.maxOf(c)}`;
-    if (c.type === 'flag') return a === 'yes' ? 'Выявлено' : 'Не выявлено';
-    return a === 'yes' ? 'Да' : 'Нет';
-  };
-  const ansTag = (c, a) => { const bad = c.type === 'flag' ? a === 'yes' : a === 'no' || a === 0; const good = c.type === 'flag' ? a === 'no' : a === 'yes' || (c.type === 'scale' && a === Scoring.maxOf(c)); return a === 'na' ? 'tag' : bad ? 'tag red' : good ? 'tag green' : 'tag amber'; };
-  const resultOf = (id) => { const r = S.results[id]; return r ? { r, calc: Scoring.compute(r.checklist, r.items) } : null; };
-  const openAppeals = () => S.appeals.filter((a) => a.status === 'open');
+  // Данные с бэкенда (не сохраняются в браузере)
+  const R = { online: null, health: null, datasets: [], convs: [], versions: [], active: null, clCache: {}, conv: null, card: null, appeals: [], openAppeals: 0, analytics: null, job: null };
+  let draft = null, lastDiff = null, pollTimer = null;
+
+  const SPEAKER = { operator: 'оператор', client: 'клиент', bot: 'бот', system: 'система' };
+  const GROSS = { insult: 'оскорбление клиента', bypass_offer: 'предложение услуги в обход компании', confidential_leak: 'раскрытие конфиденциальной информации' };
+  const TYPE = { binary: 'Да / Нет', scale: 'шкала', flag: 'флаг' };
+
+  function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200); }
+
+  /* ---------- API ---------- */
+  async function api(path, options = {}) {
+    let response;
+    try {
+      response = await fetch(`${S.backendUrl.replace(/\/$/, '')}${path}`, { ...options, headers: { ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
+    } catch (e) {
+      R.online = false; throw new Error('бэкенд недоступен');
+    }
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const d = body.detail;
+      throw new Error(Array.isArray(d) ? d.map((x) => String(x.msg || '').replace(/^Value error, /, '')).join('; ') : d || `HTTP ${response.status}`);
+    }
+    return body;
+  }
+  const post = (path, data) => api(path, { method: 'POST', body: JSON.stringify(data ?? {}) });
+  const qs = (o) => { const p = Object.entries(o).filter(([, v]) => v !== '' && v !== null && v !== undefined); return p.length ? '?' + p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&') : ''; };
+
+  async function getChecklist(id) {
+    if (!R.clCache[id]) R.clCache[id] = await api(`/checklists/${id}`);
+    return R.clCache[id];
+  }
+  async function loadBase() {
+    try {
+      R.health = await api('/health'); R.online = true;
+      [R.versions, R.active, R.datasets] = await Promise.all([api('/checklists'), api('/checklists/active').catch(() => null), api('/datasets')]);
+      if (S.dataset && !R.datasets.some((d) => d.dataset === S.dataset)) S.dataset = '';
+      await Promise.all([loadConvs(), loadOpenCount()]);
+    } catch (e) { R.online = false; R.health = null; }
+  }
+  async function loadConvs() { R.convs = await api('/conversations' + qs({ dataset: S.dataset })); }
+  async function loadOpenCount() { R.openAppeals = (await api('/appeals?status=open')).length; }
+  async function openCard(id, evaluationId) {
+    R.conv = await api(`/conversations/${encodeURIComponent(id)}`);
+    const eid = evaluationId || (R.conv.evaluations[0] && R.conv.evaluations[0].id);
+    R.card = eid ? await api(`/evaluations/${eid}`) : null;
+    if (R.card) await getChecklist(R.card.checklist.id);
+    S.ui.cardId = id;
+  }
+  async function refreshCard() { if (R.conv) await openCard(R.conv.id, R.card && R.card.evaluation.id); }
 
   /* ---------- шапка ---------- */
   function renderNav() {
-    const tabs = [['dialogs', 'Диалоги'], ['card', 'Карточка'], ['appeals', 'Апелляции'], ['checklist', 'Чек-лист']];
-    $('#nav').innerHTML = tabs.map(([k, l]) => `<button data-act="nav" data-v="${k}" class="${S.ui.view === k ? 'on' : ''}">${l}${k === 'appeals' && openAppeals().length ? `<span class="cnt">${openAppeals().length}</span>` : ''}</button>`).join('');
-    const c = activeCl(); $('#cl-pill').textContent = `${c.name} · v${c.version}`;
+    const tabs = [['dialogs', 'Диалоги'], ['card', 'Карточка'], ['appeals', 'Апелляции'], ['checklist', 'Чек-лист'], ['analytics', 'Аналитика']];
+    $('#nav').innerHTML = tabs.map(([k, l]) => `<button data-act="nav" data-v="${k}" class="${S.ui.view === k ? 'on' : ''}">${l}${k === 'appeals' && R.openAppeals ? `<span class="cnt">${R.openAppeals}</span>` : ''}</button>`).join('');
+    $('#cl-pill').textContent = R.active ? `${R.active.name} · v${R.active.version}` : 'Нет данных';
   }
+  const offline = () => `<div class="panel empty">Бэкенд недоступен по адресу <b>${esc(S.backendUrl)}</b>.<br>Запустите сервер (<code>make run</code> в папке backend) и нажмите «Подключить» на вкладке «Диалоги».</div>`;
 
   /* ---------- Диалоги ---------- */
+  function statusTag() {
+    if (R.online === null) return '<span class="tag">подключение…</span>';
+    if (!R.online) return '<span class="tag red">бэкенд недоступен</span>';
+    return `<span class="tag green">● ${esc(R.health.provider)} · ${esc(R.health.model)}</span>`;
+  }
+  function jobBox() {
+    const j = R.job; if (!j) return '';
+    const pct = j.total ? Math.round((j.processed / j.total) * 100) : 100;
+    const kind = j.kind === 'reapply' ? 'Применение чек-листа' : 'Оценка';
+    const fails = j.failed.length ? `<details class="small" style="margin-top:6px"><summary>Ошибки (${j.failed.length})</summary>${j.failed.map((f) => `<div>${esc(f.conversation_id)}: ${esc(f.reason)}</div>`).join('')}</details>` : '';
+    const skips = j.skipped.length ? `<details class="small" style="margin-top:6px"><summary>Пропущено (${j.skipped.length})</summary>${j.skipped.map((f) => `<div>${esc(f.conversation_id)}: ${esc(f.reason)}</div>`).join('')}</details>` : '';
+    return `<div class="jobbox"><div class="row small"><b style="color:var(--text)">${kind}</b><span>${j.status === 'running' ? 'идёт…' : 'завершено'}</span><div class="spacer"></div>
+      <span>обработано ${j.processed} из ${j.total} · готово ${j.done.length} · пропущено ${j.skipped.length} · ошибок ${j.failed.length}</span>
+      ${j.status !== 'running' ? '<button class="btn sm" data-act="closejob">Скрыть</button>' : ''}</div>
+      <div class="bar" style="margin-top:6px"><i style="width:${pct}%"></i></div>${fails}${skips}</div>`;
+  }
   function viewDialogs() {
-    const rows = S.records.map((r) => {
-      const x = resultOf(r.conversation_id), ap = S.appeals.filter((a) => a.convId === r.conversation_id);
-      return `<tr class="click" data-act="open" data-id="${esc(r.conversation_id)}"><td><b>${esc(r.conversation_id)}</b></td>
-      <td><span class="tag ${r.channel === 'voice call' ? 'blue' : ''}">${r.channel === 'voice call' ? '☎ звонок' : '✉ чат'}</span></td><td>${esc(r.language)}</td><td>${r.transcript.length}</td>
-      <td>${x ? `<span class="score ${cls(x.calc.total)}">${fmt(x.calc.total)}</span>` : '<span class="small">не оценён</span>'}</td>
-      <td>${x && x.calc.flag ? '<span class="tag red">грубая ошибка</span>' : ''}</td>
-      <td>${ap.length ? `<span class="tag gold">${ap.length}</span>` : ''}</td>
-      <td><button class="btn sm" data-act="evalone" data-id="${esc(r.conversation_id)}">Оценить</button></td></tr>`;
-    }).join('');
-    return `<div class="panel"><h2>Источник данных</h2><div class="row">
-      <input id="backend-url" style="width:220px" value="${esc(S.backendUrl)}" placeholder="http://localhost:8000/api"><input id="backend-dataset" style="width:130px" value="${esc(S.dataset)}" placeholder="DEV"><button class="btn primary" data-act="backend-load">Загрузить из бэкенда</button>
-      <span class="small">Загрузит dataset в API бэкенда из его DATASET_API_URL и откроет диалоги.</span></div><div class="row" style="margin-top:10px">
-      <input id="api-url" style="flex:1;min-width:260px" placeholder="URL GET (DEV или контрольный group_id)" value="${esc(S.apiUrl)}">
-      <button class="btn primary" data-act="loadurl">Загрузить по URL</button>
-      <label class="btn" style="margin:0;text-transform:none;letter-spacing:0;color:inherit">Файл JSON<input type="file" id="file-in" accept=".json" hidden></label>
-      <button class="btn" data-act="demo">Демо-данные</button></div>
-      <p class="small" style="margin:8px 0 0">Если браузер блокирует запрос (CORS), загрузите ответ API файлом или проксируйте через бэкенд.</p></div>
-    <div class="panel" style="margin-top:18px"><div class="row"><h2 style="margin:0">Диалоги · ${S.records.length}</h2><div class="spacer"></div>
-      <span class="small">Чек-лист:</span><select id="cl-select" style="width:auto">${S.checklists.map((c) => `<option value="${c.id}" ${c.id === S.activeCl ? 'selected' : ''}>${esc(c.name)} v${c.version}</option>`).join('')}</select>
-      <button class="btn primary" data-act="evalall" ${S.records.length ? '' : 'disabled'}>Оценить все</button>
-      <button class="btn" data-act="export-results" ${Object.keys(S.results).length ? '' : 'disabled'}>Скачать оценки JSON</button></div>
-      <div class="row" style="margin-top:10px"><label class="small">Команда <input id="export-team" value="${esc(S.exportMeta.teamName)}"></label><label class="small">Режим модели <select id="export-mode"><option value="local" ${S.exportMeta.modelMode === 'local' ? 'selected' : ''}>local</option><option value="remote" ${S.exportMeta.modelMode === 'remote' ? 'selected' : ''}>remote</option></select></label><label class="small">Модель <input id="export-model" value="${esc(S.exportMeta.modelName)}"></label></div>
-      ${S.records.length ? `<table style="margin-top:12px"><thead><tr><th>ID</th><th>Канал</th><th>Язык</th><th>Реплик</th><th>Итог</th><th>Флаг</th><th>Апеляций</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">Загрузите диалоги: по URL, файлом или демо-набором.</div>'}</div>`;
-  }
-
-  async function evaluate(id) {
-    const r = rec(id), cl = clone(activeCl()), old = S.results[id];
-    if (S.dataSource === 'backend') {
-      const card = await api(`/evaluate`, { method: 'POST', body: JSON.stringify({ conversation_id: id }) });
-      const rawCl = await api('/checklists/active');
-      const data = rawCl.data;
-      const mappedCl = { id: String(rawCl.id), name: rawCl.name || data.name, version: rawCl.version, criteria: data.criteria.map((c) => ({ id: c.id, section: c.section, title: c.title, type: c.type === 'binary' ? 'yesno' : c.type, weight: c.weight, na: c.na_allowed, naRule: c.na_condition, steps: (c.scale || []).map((s) => ({ v: s.value, label: s.description })) })) };
-      S.checklists = [mappedCl]; S.activeCl = mappedCl.id;
-      const items = {};
-      (card.final.items || []).forEach((it) => { const a = it.answer; items[it.id] = { answer: a === 'na' ? 'na' : it.type === 'scale' ? it.value : a, explanation: it.explanation || '', evidence: (it.evidence_ids || []).map((n) => n - 1), checked: it.checked_range || '' }; });
-      S.results[id] = { clId: mappedCl.id, clVersion: mappedCl.version, checklist: mappedCl, items, at: card.evaluation.created_at, backendEvaluationId: card.evaluation.id };
-      save(); return;
-    }
-    const items = await Evaluator.run(r, cl, S.endpoint);
-    const sig = (c) => JSON.stringify([c.type, c.weight, c.rule, c.steps]);
-    if (old) cl.criteria.forEach((c) => { // сохраняем решения проверяющего для неизменённых критериев
-      const oc = old.checklist.criteria.find((x) => x.id === c.id), oi = old.items[c.id];
-      if (oc && oi && oi.decision && sig(oc) === sig(c)) { items[c.id].decision = oi.decision; }
-    });
-    S.results[id] = { clId: cl.id, clVersion: cl.version, checklist: cl, items, at: new Date().toISOString() };
-    save();
-  }
-
-  async function api(path, options = {}) {
-    const response = await fetch(`${S.backendUrl.replace(/\/$/, '')}${path}`, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
-    return body;
-  }
-
-  async function loadBackend() {
-    S.backendUrl = $('#backend-url').value.trim().replace(/\/$/, ''); S.dataset = $('#backend-dataset').value.trim();
-    if (!S.backendUrl || !S.dataset) return toast('Укажите адрес API и название набора');
-    toast('Импортирую набор и загружаю диалоги…');
-    try {
-      await api('/datasets/import', { method: 'POST', body: JSON.stringify({ group_id: S.dataset }) });
-      const list = await api(`/conversations?dataset=${encodeURIComponent(S.dataset)}`);
-      const records = await Promise.all(list.map((x) => api(`/conversations/${encodeURIComponent(x.id)}`)));
-      S.records = records.map((x) => ({ conversation_id: x.conversation_id, channel: x.channel || 'chat', language: x.language || '', transcript: x.transcript || [], audio_url: x.audio_url || null }));
-      S.results = {}; S.appeals = []; S.dataSource = 'backend'; S.ui.cardId = null; indexRecords(); save();
-      toast(`Загружено диалогов: ${S.records.length}`); render();
-    } catch (err) { toast(`Ошибка бэкенда: ${err.message}`); }
-  }
-  async function evaluateMany(ids) {
-    toast('Идёт оценка…');
-    try { for (const id of ids) await evaluate(id); toast(`Оценено диалогов: ${ids.length}`); } catch (e) { toast('Ошибка: ' + e.message); }
-    render();
-  }
-
-  function exportResults() {
-    const results = S.records.filter((r) => S.results[r.conversation_id]).map((record) => {
-      const stored = S.results[record.conversation_id];
-      const calc = Scoring.compute(stored.checklist, stored.items);
-      const criteria = stored.checklist.criteria.map((c) => {
-        const item = stored.items[c.id] || {};
-        const answer = Scoring.finalAnswer(item);
-        const value = answer === undefined || answer === null || answer === 'na'
-          ? null : c.type === 'flag' ? answer === 'yes' : c.type === 'scale' ? Number(answer) : answer === 'yes';
-        return {
-          criterion_id: c.id,
-          value,
-          rationale: item.decision ? `${item.explanation || ''}${item.decision.reason ? ` Решение проверяющего: ${item.decision.reason}` : ''}`.trim() : (item.explanation || ''),
-          evidence_turns: (item.evidence || []).filter((i) => Number.isInteger(i) && i >= 0 && i < record.transcript.length).map((i) => i + 1)
-        };
-      });
-      return { conversation_id: record.conversation_id, status: 'ok', criteria, score: { final_score: calc.total, critical_flag: calc.flag } };
-    });
-    if (!results.length) return toast('Сначала оцените хотя бы один диалог');
-    const payload = { schema_version: '1.0', team_name: S.exportMeta.teamName || 'Название команды', model: { mode: S.exportMeta.modelMode || 'local', name: S.exportMeta.modelName || 'Название модели' }, results };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = `cqa-results-${new Date().toISOString().slice(0, 10)}.json`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast(`Скачан JSON: ${results.length} оценок`);
+    const ds = R.datasets.map((d) => `<option value="${esc(d.dataset)}" ${d.dataset === S.dataset ? 'selected' : ''}>${esc(d.dataset)} · ${d.total}</option>`).join('');
+    const vers = R.versions.map((c) => `<option value="${c.id}" ${R.active && c.id === R.active.id ? 'selected' : ''}>${esc(c.name)} v${c.version}${c.is_active ? ' (активна)' : ''}</option>`).join('');
+    const rows = R.convs.map((r) => `<tr class="click" data-act="open" data-id="${esc(r.id)}"><td><b>${esc(r.id)}</b></td>
+      <td><span class="tag ${r.channel === 'voice call' ? 'blue' : ''}">${r.channel === 'voice call' ? '☎ звонок' : '✉ чат'}</span></td><td>${esc(r.language)}</td><td>${r.messages ?? '—'}</td>
+      <td>${r.total !== null && r.total !== undefined ? `<span class="score ${cls(r.total)}">${fmt(r.total)}</span>${r.preliminary ? ' <span class="tag amber" title="По части критериев нет ответа модели">предв.</span>' : ''}` : `<span class="small">${r.last_evaluation_id ? 'не рассчитывается' : 'не оценён'}</span>`}</td>
+      <td>${r.gross_error ? '<span class="tag red">грубая ошибка</span>' : ''}</td>
+      <td>${r.open_appeals ? `<span class="tag gold">${r.open_appeals}</span>` : ''}</td>
+      <td>${r.excluded ? '<span class="tag" title="Канал исключён из отправки в модель (EXCLUDE_CHANNELS)">не в модель</span>' : `<button class="btn sm" data-act="evalone" data-id="${esc(r.id)}">${r.last_evaluation_id ? 'Переоценить' : 'Оценить'}</button>`}</td></tr>`).join('');
+    const running = R.job && R.job.status === 'running';
+    const m = S.exportMeta;
+    const list = !R.online ? offline()
+      : `<div class="panel" style="margin-top:18px"><div class="row"><h2 style="margin:0">Диалоги · ${R.convs.length}</h2><div class="spacer"></div>
+        <span class="small">Набор:</span><select id="ds-select" style="width:auto"><option value="">Все наборы</option>${ds}</select>
+        <span class="small">Чек-лист:</span><select id="cl-select" style="width:auto">${vers || '<option>Нет данных</option>'}</select></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" data-act="batch" data-mode="evaluate" data-missing="1" ${R.convs.length && !running ? '' : 'disabled'}>Оценить неоценённые</button>
+          <button class="btn" data-act="batch" data-mode="evaluate" ${R.convs.length && !running ? '' : 'disabled'}>Переоценить все</button>
+          <button class="btn" data-act="batch" data-mode="reapply" ${R.convs.length && !running ? '' : 'disabled'} title="Перенести оценки на активный чек-лист: модель вызывается только по изменённым критериям">Применить активный чек-лист</button>
+          <div class="spacer"></div><span class="small">Действия применяются к выбранному набору</span></div>
+        ${jobBox()}
+        <div class="row" style="margin-top:12px;align-items:flex-end">
+          <div style="flex:2;min-width:180px"><label>Команда</label><input id="export-team" value="${esc(m.teamName)}" placeholder="Название команды"></div>
+          <div style="flex:1;min-width:140px"><label>Режим модели</label><select id="export-mode"><option value="" ${!m.modelMode ? 'selected' : ''}>авто${R.health ? ` (${R.health.provider === 'gemini' ? 'remote' : 'local'})` : ''}</option><option value="remote" ${m.modelMode === 'remote' ? 'selected' : ''}>remote</option><option value="local" ${m.modelMode === 'local' ? 'selected' : ''}>local</option></select></div>
+          <div style="flex:2;min-width:180px"><label>Модель</label><input id="export-model" value="${esc(m.modelName)}" placeholder="${esc(R.health ? R.health.model : 'Название модели')}"></div>
+          <button class="btn" data-act="export">Скачать оценки JSON</button></div>
+        ${R.convs.length ? `<table style="margin-top:12px"><thead><tr><th>ID</th><th>Канал</th><th>Язык</th><th>Реплик</th><th>Итог</th><th>Флаг</th><th>Апелляций</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+          : '<div class="empty">Нет данных. Импортируйте набор: по group_id, по ссылке или файлом JSON.</div>'}</div>`;
+    return `<div class="panel"><h2>Источник данных</h2>
+      <div class="row"><input id="backend-url" style="width:260px" value="${esc(S.backendUrl)}" placeholder="http://localhost:8000/api"><button class="btn" data-act="connect">Подключить</button>${statusTag()}</div>
+      <div class="row" style="margin-top:10px"><input id="import-group" style="width:200px" value="${esc(S.importGroup)}" placeholder="group_id, например DEV"><button class="btn primary" data-act="import-group" ${R.online ? '' : 'disabled'}>Импорт из API организаторов</button>
+        <span class="small">Ссылка берётся из DATASET_API_URL бэкенда, group_id дописывается автоматически.</span></div>
+      <div class="row" style="margin-top:10px"><input id="import-url" style="flex:1;min-width:260px" value="${esc(S.importUrl)}" placeholder="Полная ссылка на набор (если выдали другой URL)">
+        <button class="btn" data-act="import-url" ${R.online ? '' : 'disabled'}>Загрузить по URL</button>
+        <label class="btn" style="margin:0;text-transform:none;letter-spacing:0;color:inherit">Файл JSON<input type="file" id="file-in" accept=".json" hidden ${R.online ? '' : 'disabled'}></label></div>
+      <p class="small" style="margin:8px 0 0">Ссылку скачивает бэкенд, поэтому CORS не мешает, а подпись не сохраняется в браузере.</p></div>${list}`;
   }
 
   /* ---------- Карточка ---------- */
-  function viewCard() {
-    const r = rec(S.ui.cardId);
-    if (!r) return '<div class="panel empty">Выберите диалог в списке «Диалоги».</div>';
-    const x = resultOf(r.conversation_id);
-    const ev = new Set(); if (x) Object.values(x.r.items).forEach((i) => (i.evidence || []).forEach((e) => ev.add(e)));
-    const msgs = r.transcript.map((m, i) => `<div class="msg ${m.speaker} ${ev.has(i) ? 'hl' : ''}" id="m-${i}"><span class="ts" title="${esc(m.timestamp)}">${esc(tsView(m))}</span><span class="who">${m.speaker}</span><span>${esc(m.text)}</span>${r.audio_url ? `<button class="seek" data-act="seek" data-i="${i}" title="Перейти к фрагменту записи">▶</button>` : ''}</div>`).join('');
-    const audio = r.audio_url ? `<audio id="player" controls preload="metadata"></audio><div class="small" id="audio-msg" style="margin:-4px 0 6px"></div>
-      <div class="row small" style="margin-bottom:10px;gap:8px">Сдвиг, с <input id="shift" type="number" step="0.5" style="width:84px;padding:4px 8px"><button class="btn sm" data-act="syncpos" title="Нажмите ▶ у реплики, найдите её место в записи и нажмите здесь">Привязать к позиции плеера</button><button class="btn sm" data-act="resetshift">Сброс</button></div>` : '';
-    return `<div class="row" style="margin-bottom:14px"><button class="btn" data-act="nav" data-v="dialogs">← К списку</button><h2 style="color:var(--text)">${esc(r.conversation_id)}</h2>
-      <span class="tag">${esc(r.channel)}</span><span class="tag">${esc(r.language)}</span><div class="spacer"></div>
-      <button class="btn primary" data-act="evalone" data-id="${esc(r.conversation_id)}">${x ? 'Переоценить' : 'Запустить оценку'}</button></div>
-    <div class="grid2"><div class="panel sticky"><h2>Транскрипт</h2>${audio}<div class="transcript">${msgs}</div></div>
-    <div>${x ? resultPanel(r, x) : '<div class="panel empty">Оценка не запускалась. Нажмите «Запустить оценку».</div>'}</div></div>`;
+  const critOf = (clId, id) => { const c = R.clCache[clId]; return c && c.data.criteria.find((q) => q.id === id); };
+  const maxStep = (c) => (c && c.scale && c.scale.length ? Math.max(...c.scale.map((s) => s.value)) : null);
+  function ansLabel(item, c) {
+    if (!item || item.status === 'error') return 'нет ответа';
+    if (item.na || item.answer === 'na') return 'N/A';
+    if (item.type === 'scale') return `${item.value} / ${maxStep(c) ?? '?'}`;
+    if (item.type === 'flag') return item.value === 1 ? 'Выявлено' : 'Не выявлено';
+    return item.value === 1 ? 'Да' : 'Нет';
   }
-
-  function resultPanel(r, x) {
-    const { calc } = x, cl = x.r.checklist, items = x.r.items;
-    const col = calc.total === null ? '' : calc.total >= 80 ? 'var(--green)' : calc.total >= 55 ? 'var(--amber)' : 'var(--red)';
-    const secs = Object.entries(calc.sections).map(([k, v]) => `<div class="sec"><span>${esc(k)}</span><span>${fmt(v.points)} / ${fmt(v.max)}</span></div><div class="bar"><i style="width:${v.max ? (v.points / v.max) * 100 : 0}%"></i></div>`).join('');
-    const crits = cl.criteria.map((c) => critHtml(r, c, items[c.id], calc.rows.find((q) => q.id === c.id))).join('');
-    const flagC = cl.criteria.find((c) => c.type === 'flag');
-    const origTotal = Scoring.compute(cl, Object.fromEntries(Object.entries(items).map(([k, v]) => [k, { answer: v.answer }]))).total;
-    return `<div class="panel"><div class="row" style="align-items:flex-start;gap:22px"><div class="ring" style="--p:${calc.total || 0};--c:${col}"><div><div><b>${fmt(calc.total)}</b><small>из 100</small></div></div></div>
-      <div style="flex:1;min-width:220px"><h2>Итог</h2>${secs}<p class="small" style="margin:8px 0 0">${origTotal !== calc.total ? `Исходный итог: <b>${fmt(origTotal)}</b> → после пересмотра: <b>${fmt(calc.total)}</b>. ` : ''}Чек-лист v${x.r.clVersion}</p></div></div>
-      ${flagC ? `<div class="flagbox ${calc.flag ? 'bad' : 'ok'}">${calc.flag ? '⚠ Грубая ошибка выявлена — отмечено отдельно, баллы не затрагивает' : '✓ Грубых ошибок не выявлено'}</div>` : ''}</div>
+  function ansTag(item, c) {
+    if (!item || item.status === 'error') return 'tag amber';
+    if (item.na) return 'tag';
+    if (item.type === 'flag') return item.value === 1 ? 'tag red' : 'tag green';
+    if (item.type === 'scale') return item.value === maxStep(c) ? 'tag green' : item.value === 0 ? 'tag red' : 'tag amber';
+    return item.value === 1 ? 'tag green' : 'tag red';
+  }
+  function viewCard() {
+    if (!R.online) return offline();
+    const conv = R.conv;
+    if (!conv) return '<div class="panel empty">Выберите диалог в списке «Диалоги».</div>';
+    const card = R.card;
+    const excluded = (R.convs.find((x) => x.id === conv.id) || {}).excluded;
+    const ev = new Set(); if (card) card.final.criteria.forEach((i) => (i.evidence_ids || []).forEach((n) => ev.add(n)));
+    const msgs = conv.transcript.map((m) => `<div class="msg ${esc(m.speaker)} ${ev.has(m.index) ? 'hl' : ''}" id="m-${m.index}"><span class="ts" title="${esc(m.timestamp)}">#${m.index} ${mmss(m.offset_sec)}</span><span class="who">${esc(SPEAKER[m.speaker] || m.speaker)}</span><span>${esc(m.text)}</span>${conv.audio_url ? `<button class="seek" data-act="seek" data-i="${m.index}" title="Перейти к фрагменту записи">▶</button>` : ''}</div>`).join('');
+    const audio = conv.audio_url ? `<audio id="player" controls preload="metadata" src="${esc(S.backendUrl.replace(/\/$/, ''))}/audio/${encodeURIComponent(conv.id)}"></audio><div class="small" id="audio-msg" style="margin:-4px 0 6px"></div>
+      <div class="row small" style="margin-bottom:10px;gap:8px">Сдвиг, с <input id="shift" type="number" step="0.5" style="width:84px;padding:4px 8px" value="${shiftOf(conv.id)}"><button class="btn sm" data-act="syncpos" title="Нажмите ▶ у реплики, найдите её место в записи и нажмите здесь">Привязать к позиции плеера</button><button class="btn sm" data-act="resetshift">Сброс</button></div>` : '';
+    const hist = conv.evaluations.length > 1 ? `<select id="eval-select" style="width:auto">${conv.evaluations.map((e) => `<option value="${e.id}" ${card && card.evaluation.id === e.id ? 'selected' : ''}>Оценка #${e.id} · ${dt(e.created_at)}${e.parent_id ? ' · перенос' : ''}</option>`).join('')}</select>` : '';
+    const stale = card && R.active && card.checklist.id !== R.active.id;
+    const actions = excluded ? '<span class="tag" title="EXCLUDE_CHANNELS">канал не отправляется в модель</span>'
+      : `${stale ? `<button class="btn" data-act="reapply" title="Модель переоценит только изменённые критерии">Применить чек-лист v${R.active.version}</button>` : ''}<button class="btn primary" data-act="evalone" data-id="${esc(conv.id)}">${card ? 'Оценить заново' : 'Запустить оценку'}</button>`;
+    const right = card ? resultPanel(card)
+      : `<div class="panel empty">${excluded ? 'Этот канал исключён из отправки в модель (реальные звонки не передаются в бесплатный API). Нет данных для оценки.' : 'Нет данных: оценка не запускалась. Нажмите «Запустить оценку».'}</div>`;
+    return `<div class="row" style="margin-bottom:14px"><button class="btn" data-act="nav" data-v="dialogs">← К списку</button><h2 style="color:var(--text)">${esc(conv.id)}</h2>
+      <span class="tag">${esc(conv.channel)}</span><span class="tag">${esc(conv.language)}</span>${hist}<div class="spacer"></div>${actions}</div>
+    <div class="grid2"><div class="panel sticky"><h2>Транскрипт</h2>${audio}<div class="transcript">${msgs || '<div class="empty">Нет данных</div>'}</div></div><div>${right}</div></div>`;
+  }
+  function resultPanel(card) {
+    const f = card.final, o = card.original, meta = card.meta || {};
+    const col = f.total === null ? '' : f.total >= 80 ? 'var(--green)' : f.total >= 55 ? 'var(--amber)' : 'var(--red)';
+    const secs = f.sections.filter((s) => s.max > 0).map((s) => `<div class="sec"><span>${esc(s.title)}</span><span>${fmt(s.points)} / ${fmt(s.max)}</span></div><div class="bar"><i style="width:${s.max ? (s.points / s.max) * 100 : 0}%"></i></div>`).join('');
+    const g = f.gross_errors;
+    const tokens = meta.tokens && meta.tokens.total_tokens ? ` · токены ${meta.tokens.prompt_tokens}/${meta.tokens.completion_tokens}` : '';
+    const metaLine = `${esc(meta.model || '')}${meta.seconds ? ` · ${meta.seconds} с` : ''}${tokens}${meta.reapplied_from ? ` · перенесено из оценки #${meta.reapplied_from}` : ''}`;
+    const warns = f.warnings.length ? `<details class="small" style="margin-top:10px"><summary>Предупреждения (${f.warnings.length})</summary>${f.warnings.map((w) => `<div>• ${esc(w)}</div>`).join('')}</details>` : '';
+    const crits = f.criteria.map((i) => critHtml(card, i)).join('');
+    return `<div class="panel"><div class="row" style="align-items:flex-start;gap:22px"><div class="ring" style="--p:${f.total || 0};--c:${col}"><div><div><b>${fmt(f.total)}</b><small>из 100</small></div></div></div>
+      <div style="flex:1;min-width:220px"><h2>Итог${f.preliminary ? ' <span class="tag amber">предварительный</span>' : ''}</h2>${secs || '<div class="small">Нет данных</div>'}
+      <p class="small" style="margin:8px 0 0">${o.total !== f.total ? `Исходный итог: <b>${fmt(o.total)}</b> → после апелляций: <b>${fmt(f.total)}</b>. ` : ''}Чек-лист v${card.checklist.version}${card.checklist.is_active ? '' : ' (не активный)'} · ${metaLine}</p></div></div>
+      <div class="flagbox ${g.detected ? 'bad' : 'ok'}">${g.detected ? `⚠ Грубая ошибка: ${esc(g.types.map((t) => GROSS[t] || t).join(', ') || 'тип не указан')}. Отмечено отдельно, на баллы не влияет` : '✓ Грубых ошибок не выявлено'}</div>${warns}</div>
       <div class="panel" style="margin-top:18px"><h2>Критерии</h2>${crits}</div>`;
   }
-
-  function critHtml(r, c, it, row) {
-    if (!it) return '';
-    const fin = Scoring.finalAnswer(it), na = fin === 'na';
-    const chips = (it.evidence || []).filter((i) => r.transcript[i]).map((i) => `<span class="chip" data-act="jump" data-i="${i}">${esc(tsView(r.transcript[i]))}</span>`).join(' ');
-    const quotes = (it.evidence || []).filter((i) => r.transcript[i]).slice(0, 2).map((i) => `<div class="quote">${esc(r.transcript[i].speaker)}: ${esc(r.transcript[i].text)}</div>`).join('');
-    const pts = c.type === 'flag' ? '' : `<span class="small">${na ? 'вес перераспределён' : `${fmt(row.points)} из ${fmt(row.effWeight)}`} · вес ${c.weight}</span>`;
-    const ap = S.appeals.filter((a) => a.convId === r.conversation_id && a.critId === c.id);
-    const hist = (it.decision || ap.length) ? `<div class="hist">${ap.map((a) => `Апелляция (${a.status === 'open' ? 'на рассмотрении' : 'решена'}): «${esc(a.comment)}»<br>`).join('')}${it.decision ? `Исходная оценка: <b>${esc(ansLabel(c, it.answer))}</b> → решение: <b>${esc(ansLabel(c, it.decision.answer))}</b> — ${esc(it.decision.reason)}<br>Финальная: <b>${esc(ansLabel(c, fin))}</b>` : ''}</div>` : '';
-    return `<div class="crit ${na ? 'na' : ''}"><div class="crit-h"><h3>${esc(c.title)}</h3><span class="${ansTag(c, fin)}">${esc(ansLabel(c, fin))}</span>${pts}
-      <button class="btn sm" data-act="appeal" data-c="${c.id}" data-id="${esc(r.conversation_id)}">Оспорить</button></div>
-      <p>${esc(it.explanation || '')}</p>${it.checked ? `<p class="small">Проверенный участок: ${esc(it.checked)}</p>` : ''}
-      ${na && c.naRule ? `<p class="small">Условие N/A: ${esc(c.naRule)}</p>` : ''}${quotes}${chips ? `<div class="row" style="gap:6px">${chips}</div>` : ''}${hist}</div>`;
+  function critHtml(card, it) {
+    const clId = card.checklist.id, c = critOf(clId, it.id) || {}, conv = R.conv;
+    const orig = card.original.criteria.find((q) => q.id === it.id);
+    const msg = (n) => conv.transcript[n - 1];
+    const evid = (it.evidence_ids || []).filter((n) => msg(n));
+    const chips = evid.map((n) => `<span class="chip" data-act="jump" data-i="${n}">#${n} · ${mmss(msg(n).offset_sec)}</span>`).join(' ');
+    const quotes = evid.slice(0, 2).map((n) => `<div class="quote">${esc(SPEAKER[msg(n).speaker] || msg(n).speaker)}: ${esc(msg(n).text)}</div>`).join('');
+    const pts = it.type === 'flag' ? '' : `<span class="small">${it.status === 'error' ? 'исключён из расчёта' : it.na ? 'вес перераспределён' : `${fmt(it.final_points)} из ${fmt(it.effective_weight)}`} · вес ${fmt(it.weight)}</span>`;
+    const aps = card.appeals.filter((a) => a.criterion_id === it.id);
+    const open = aps.some((a) => a.status === 'open');
+    const hist = aps.length ? `<div class="hist">${aps.map((a) => `Апелляция #${a.id} (${a.status === 'open' ? 'на рассмотрении' : 'решена'}): «${esc(a.comment)}»${a.status === 'resolved' ? `<br>${a.decision === 'changed' ? `Исходная оценка: <b>${esc(ansLabel(orig, c))}</b> → решение: <b>${esc(ansLabel({ ...it, ...a.new_answer, type: it.type }, c))}</b>` : 'Оценка подтверждена'} — ${esc(a.reason)}` : ''}`).join('<br>')}</div>` : '';
+    return `<div class="crit ${it.na ? 'na' : ''}"><div class="crit-h"><h3>${esc(it.title)}</h3><span class="${ansTag(it, c)}">${esc(ansLabel(it, c))}</span>${pts}
+      ${open ? '<span class="tag gold">апелляция открыта</span>' : `<button class="btn sm" data-act="appeal" data-c="${esc(it.id)}">Оспорить</button>`}</div>
+      <p>${esc(it.explanation || 'Нет данных')}</p>${it.checked_range ? `<p class="small">Проверенный участок: ${esc(it.checked_range)}</p>` : ''}
+      ${it.na && c.na_condition ? `<p class="small">Условие N/A: ${esc(c.na_condition)}</p>` : ''}${quotes}${chips ? `<div class="row" style="gap:6px">${chips}</div>` : ''}${hist}</div>`;
+  }
+  function appealModal(critId) {
+    const it = R.card.final.criteria.find((q) => q.id === critId), c = critOf(R.card.checklist.id, critId) || {};
+    $('#modal-host').innerHTML = `<div class="modal-bg" data-act="closemodal"><div class="panel modal" data-stop="1"><h2>Оспорить критерий</h2>
+      <p><b>${esc(it.title)}</b> — ${esc(ansLabel(it, c))}</p><div class="quote">${esc(it.explanation)}</div>
+      <label>Комментарий</label><textarea id="ap-text" rows="4" placeholder="Почему вы не согласны с оценкой?"></textarea>
+      <div class="row" style="margin-top:12px"><button class="btn primary" data-act="sendappeal" data-c="${esc(critId)}">Подать апелляцию</button><button class="btn" data-act="closemodal">Отмена</button></div></div></div>`;
+    $('#ap-text').focus();
   }
 
-  /* ---------- Апелляции / проверяющий ---------- */
+  /* ---------- Апелляции ---------- */
   function viewAppeals() {
-    const list = S.appeals.slice().reverse();
-    const sel = S.appeals.find((a) => a.id === S.ui.appealId);
-    const l = list.map((a) => { const x = S.results[a.convId], c = x && x.checklist.criteria.find((q) => q.id === a.critId);
-      return `<div class="list-item ${sel && sel.id === a.id ? 'on' : ''}" data-act="pick" data-id="${a.id}"><div class="row"><b>${esc(a.convId)}</b><div class="spacer"></div><span class="tag ${a.status === 'open' ? 'amber' : 'green'}">${a.status === 'open' ? 'открыта' : 'решена'}</span></div><div class="small">${esc(c ? c.title : a.critId)}</div></div>`; }).join('');
-    return `<div class="split"><div class="panel"><h2>Обращения · ${S.appeals.length}</h2>${l || '<div class="empty">Нет апелляций. Откройте карточку и нажмите «Оспорить».</div>'}</div>
+    if (!R.online) return offline();
+    const sel = R.appeals.find((a) => a.id === S.ui.appealId);
+    const filters = [['open', 'Открытые'], ['resolved', 'Решённые'], ['', 'Все']].map(([k, l]) => `<button class="btn sm ${S.appealFilter === k ? 'primary' : ''}" data-act="appfilter" data-v="${k}">${l}</button>`).join('');
+    const l = R.appeals.slice().reverse().map((a) => `<div class="list-item ${sel && sel.id === a.id ? 'on' : ''}" data-act="pick" data-id="${a.id}"><div class="row"><b>${esc(a.conversation_id)}</b><div class="spacer"></div><span class="tag ${a.status === 'open' ? 'amber' : 'green'}">${a.status === 'open' ? 'открыта' : a.decision === 'changed' ? 'изменена' : 'подтверждена'}</span></div><div class="small">${esc(a.criterion.title)} · ${esc(a.comment.slice(0, 70))}</div></div>`).join('');
+    return `<div class="split"><div class="panel"><h2>Обращения · ${R.appeals.length}</h2><div class="row" style="gap:6px;margin-bottom:12px">${filters}</div>${l || '<div class="empty">Нет данных. Откройте карточку диалога и нажмите «Оспорить».</div>'}</div>
       <div>${sel ? reviewPanel(sel) : '<div class="panel empty">Выберите обращение слева.</div>'}</div></div>`;
   }
-
   function reviewPanel(a) {
-    const r = rec(a.convId), x = S.results[a.convId];
-    if (!r || !x) return '<div class="panel empty">Диалог или оценка недоступны.</div>';
-    const c = x.checklist.criteria.find((q) => q.id === a.critId), it = x.items[a.critId];
-    const ev = (it.evidence || []).filter((i) => r.transcript[i]);
-    const center = ev.length ? ev[0] : 0, from = Math.max(0, center - 2), to = Math.min(r.transcript.length - 1, center + 2);
-    const frag = r.transcript.slice(from, to + 1).map((m, k) => { const i = from + k; return `<div class="msg ${m.speaker} ${ev.includes(i) ? 'hl' : ''}"><span class="ts">${esc(tsView(m))}</span><span class="who">${m.speaker}</span><span>${esc(m.text)}</span></div>`; }).join('');
-    const opts = c.type === 'scale' ? c.steps.map((s) => `<option value="${s.v}">${s.v} — ${esc(s.label)}</option>`).join('') + (c.na ? '<option value="na">N/A</option>' : '')
-      : c.type === 'flag' ? '<option value="yes">Выявлено</option><option value="no">Не выявлено</option>'
-      : '<option value="yes">Да</option><option value="no">Нет</option>' + (c.na ? '<option value="na">N/A</option>' : '');
-    const cur = Scoring.finalAnswer(it), before = resultOf(a.convId).calc.total;
-    return `<div class="panel"><div class="row"><h2 style="margin:0">${esc(c.title)}</h2><div class="spacer"></div><button class="btn sm" data-act="open" data-id="${esc(a.convId)}">Открыть карточку</button></div>
-      <p class="small">Диалог ${esc(a.convId)} · оценка сейчас: <b>${esc(ansLabel(c, cur))}</b> · итог ${fmt(before)}</p>
-      <label>Комментарий клиента/оператора</label><div class="quote">${esc(a.comment)}</div>
-      <label>Обоснование системы</label><div class="quote">${esc(it.explanation)}</div>
-      <label>Фрагмент диалога</label>${frag}
-      ${a.status === 'open' ? `<label>Решение</label><select id="rv-ans">${opts}</select>
+    const c = a.criterion, it = a.disputed, ev = new Set(it.evidence_ids || []);
+    const frag = a.fragment.map((m) => `<div class="msg ${esc(m.speaker)} ${ev.has(m.index) ? 'hl' : ''}"><span class="ts" title="${esc(m.timestamp)}">#${m.index} ${mmss(m.offset_sec)}</span><span class="who">${esc(SPEAKER[m.speaker] || m.speaker)}</span><span>${esc(m.text)}</span></div>`).join('');
+    const opts = (c.type === 'scale' ? c.scale.slice().sort((x, y) => y.value - x.value).map((s) => `<option value="${s.value}">${s.value} — ${esc(s.description)}</option>`).join('')
+      : c.type === 'flag' ? '<option value="1">Выявлено</option><option value="0">Не выявлено</option>' : '<option value="1">Да</option><option value="0">Нет</option>') + (c.na_allowed ? '<option value="na">N/A</option>' : '');
+    const resolved = a.status === 'resolved'
+      ? `<div class="hist">${a.decision === 'changed' ? `Оценка изменена: <b>${esc(ansLabel(it, c))}</b> → <b>${esc(ansLabel({ ...it, ...a.new_answer, type: c.type }, c))}</b>` : `Оценка подтверждена: <b>${esc(ansLabel(it, c))}</b>`}<br>Причина: ${esc(a.reason)}<br>${dt(a.resolved_at)}</div>`
+      : `<label>Решение</label><select id="rv-ans">${opts}</select>
         <label>Причина</label><textarea id="rv-reason" rows="3" placeholder="Почему оценка подтверждена или изменена"></textarea>
-        <div class="row" style="margin-top:12px"><button class="btn" data-act="decide" data-mode="keep">Подтвердить оценку</button><button class="btn primary" data-act="decide" data-mode="change">Изменить оценку</button></div>`
-      : `<div class="hist">Решение: <b>${esc(ansLabel(c, it.decision ? it.decision.answer : it.answer))}</b> — ${esc(a.resolution || '')}<br>Исходная: <b>${esc(ansLabel(c, it.answer))}</b>. Итог после решения: <b>${fmt(before)}</b></div>`}</div>`;
+        <div class="row" style="margin-top:12px"><button class="btn" data-act="decide" data-mode="upheld">Подтвердить оценку</button><button class="btn primary" data-act="decide" data-mode="changed">Изменить оценку</button></div>`;
+    return `<div class="panel"><div class="row"><h2 style="margin:0">${esc(c.title)}</h2><div class="spacer"></div><button class="btn sm" data-act="open" data-id="${esc(a.conversation_id)}" data-eval="${a.evaluation_id}">Открыть карточку</button></div>
+      <p class="small">Диалог ${esc(a.conversation_id)} · ${esc(a.language)} · оценка #${a.evaluation_id} · сейчас: <b>${esc(ansLabel(it, c))}</b> · итог ${fmt(a.total)}</p>
+      <label>Комментарий</label><div class="quote">${esc(a.comment)}</div>
+      <label>Обоснование системы</label><div class="quote">${esc(it.explanation || 'Нет данных')}</div>${it.checked_range ? `<p class="small">Проверенный участок: ${esc(it.checked_range)}</p>` : ''}
+      <label>Фрагмент диалога</label>${frag || '<div class="small">Нет данных</div>'}${resolved}</div>`;
   }
 
   /* ---------- Чек-лист ---------- */
+  function newCriterion() {
+    const n = draft.criteria.length + 1;
+    let id = `c${String(n).padStart(2, '0')}_new`; while (draft.criteria.some((c) => c.id === id)) id += '_';
+    return { id, _new: true, section: (draft.sections[0] || {}).id || 'main', title: 'Новый критерий', type: 'binary', weight: 10, na_allowed: false, na_condition: '', rule: 'Да — …', scale: [], guidance: '', examples_pass: [], examples_fail: [], flag_types: [] };
+  }
   function viewChecklist() {
-    if (!draft) draft = clone(activeCl());
-    const sel = S.ui.editCrit && draft.criteria.find((c) => c.id === S.ui.editCrit) || draft.criteria[0];
+    if (!R.online) return offline();
+    if (!R.active) return '<div class="panel empty">Нет данных: на бэкенде нет активного чек-листа.</div>';
+    if (!draft) draft = clone(R.active.data);
+    const sel = (S.ui.editCrit && draft.criteria.find((c) => c.id === S.ui.editCrit)) || draft.criteria[0];
+    const secTitle = (id) => (draft.sections.find((s) => s.id === id) || {}).title || id;
     const sumW = draft.criteria.filter((c) => c.type !== 'flag').reduce((s, c) => s + (+c.weight || 0), 0);
-    const list = draft.criteria.map((c) => `<div class="list-item ${sel && sel.id === c.id ? 'on' : ''}" data-act="editpick" data-c="${c.id}"><div class="row"><b>${esc(c.title)}</b><div class="spacer"></div><span class="tag">${c.type === 'flag' ? 'флаг' : c.weight}</span></div><div class="small">${esc(c.section)} · ${c.type}${c.na ? ' · N/A' : ''}</div></div>`).join('');
-    return `<div class="split"><div class="panel"><h2>Критерии</h2>${list}<button class="btn" data-act="addcrit" style="width:100%">+ Добавить критерий</button>
-      <p class="small">Сумма весов: <b style="color:${sumW === 100 ? 'var(--green)' : 'var(--amber)'}">${sumW}</b> (итог нормируется к 100)</p></div>
-      <div class="panel">${sel ? critForm(sel) : ''}<hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+    const list = draft.criteria.map((c) => `<div class="list-item ${sel && sel.id === c.id ? 'on' : ''}" data-act="editpick" data-c="${esc(c.id)}"><div class="row"><b>${esc(c.title)}</b><div class="spacer"></div><span class="tag">${c.type === 'flag' ? 'флаг' : fmt(c.weight)}</span></div><div class="small">${esc(secTitle(c.section))} · ${TYPE[c.type] || c.type}${c.na_allowed ? ' · N/A' : ''}${c._new ? ' · новый' : ''}</div></div>`).join('');
+    const versions = R.versions.map((v) => `<div class="row small" style="margin-top:6px"><span>v${v.version} · ${dt(v.created_at)}</span><div class="spacer"></div>${v.is_active ? '<span class="tag green">активна</span>' : `<button class="btn sm" data-act="activate" data-id="${v.id}">Сделать активной</button>`}</div>${v.comment ? `<div class="small" style="opacity:.8">${esc(v.comment)}</div>` : ''}`).join('');
+    return `<div class="split"><div><div class="panel"><h2>Критерии</h2>${list}<button class="btn" data-act="addcrit" style="width:100%">+ Добавить критерий</button>
+      <p class="small">Сумма весов: <b style="color:${sumW === 100 ? 'var(--green)' : 'var(--amber)'}">${fmt(sumW)}</b> (итог всегда нормируется к 100)</p></div>
+      <div class="panel" style="margin-top:18px"><h2>Версии</h2>${versions || '<div class="small">Нет данных</div>'}</div></div>
+      <div>${lastDiff ? diffPanel(lastDiff) : ''}<div class="panel">${sel ? critForm(sel) : ''}<hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
         <div class="row"><label style="margin:0">Название чек-листа</label><input data-cl="name" value="${esc(draft.name)}" style="flex:1"></div>
-        <div class="row" style="margin-top:12px"><button class="btn primary" data-act="savecl">Сохранить конфигурацию</button><button class="btn" data-act="applycl">Применить к диалогам</button><button class="btn" data-act="resetdraft">Отменить правки</button></div>
-        <label>Прокси для аудио (необязательно)</label><input id="audioproxy" placeholder="/api/audio?url={url}" value="${esc(S.audioProxy || '')}">
-        <label>Сервис оценки (необязательно)</label><input id="endpoint" placeholder="https://…/api/evaluate — иначе демо-оценщик" value="${esc(S.endpoint)}">
-        <p class="small">«Сохранить» создаёт новую версию. «Применить» переоценивает все диалоги по активному чек-листу (решения проверяющего у неизменённых критериев сохраняются).</p></div></div>`;
+        <label>Комментарий к версии</label><input id="cl-comment" placeholder="Что изменено и зачем">
+        <div class="row" style="margin-top:12px"><button class="btn primary" data-act="savecl">Сохранить новую версию</button><button class="btn" data-act="saveweights" title="Новая версия только с изменёнными весами — пересчёт всех оценок сразу, без вызова модели">Сохранить только веса</button><button class="btn" data-act="resetdraft">Отменить правки</button></div>
+        <p class="small">«Сохранить» создаёт новую активную версию и показывает, какие критерии придётся переоценить моделью. «Только веса» пересчитывает все оценки мгновенно, без модели. Чтобы перенести оценки на новую версию, нажмите «Применить к диалогам».</p></div></div></div>`;
+  }
+  function diffPanel(d) {
+    const line = (label, ids, tag) => (ids.length ? `<div class="row small" style="margin-top:4px"><span style="min-width:150px">${label}</span>${ids.map((i) => `<span class="tag ${tag}">${esc(i)}</span>`).join(' ')}</div>` : '');
+    return `<div class="panel" style="margin-bottom:18px"><div class="row"><h2 style="margin:0">Сохранено: изменения версии</h2><div class="spacer"></div><button class="btn sm" data-act="closediff">Скрыть</button></div>
+      ${line('Изменены', d.changed, 'amber')}${line('Новые', d.new, 'green')}${line('Только вес/название', d.weight_only, '')}${line('Удалены', d.removed, 'red')}
+      <p class="small" style="margin:10px 0">${d.needs_llm.length ? `Модель переоценит только: <b>${d.needs_llm.map(esc).join(', ')}</b>. Остальные ответы будут скопированы.` : 'Модель вызываться не будет: изменились только веса или названия.'}</p>
+      <button class="btn primary" data-act="batch" data-mode="reapply" ${R.job && R.job.status === 'running' ? 'disabled' : ''}>Применить к диалогам${S.dataset ? ` (${esc(S.dataset)})` : ''}</button></div>`;
   }
   function critForm(c) {
-    const steps = (c.steps || []).map((s) => `${s.v}|${s.label}`).join('\n');
-    return `<h2>Редактирование критерия</h2><div data-crit="${c.id}">
-      <label>Формулировка</label><input data-f="title" value="${esc(c.title)}">
-      <div class="row" style="gap:12px;align-items:flex-end"><div style="flex:2"><label>Секция</label><input data-f="section" value="${esc(c.section)}"></div>
-      <div style="flex:1"><label>Тип ответа</label><select data-f="type" data-re="1"><option value="yesno" ${c.type === 'yesno' ? 'selected' : ''}>Да / Нет</option><option value="scale" ${c.type === 'scale' ? 'selected' : ''}>Числовая шкала</option><option value="flag" ${c.type === 'flag' ? 'selected' : ''}>Флаг (без баллов)</option></select></div>
-      <div style="flex:1"><label>Вес</label><input type="number" min="0" data-f="weight" value="${c.weight}" ${c.type === 'flag' ? 'disabled' : ''}></div></div>
-      <label><input type="checkbox" data-f="na" style="width:auto" ${c.na ? 'checked' : ''} ${c.type === 'flag' ? 'disabled' : ''}> Разрешить N/A</label>
+    const lines = (a) => esc((a || []).join('\n'));
+    const scale = (c.scale || []).map((s) => `${s.value}|${s.description || ''}`).join('\n');
+    const secs = draft.sections.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('');
+    return `<h2>Редактирование критерия</h2><div data-crit="${esc(c.id)}">
+      <div class="row" style="gap:12px;align-items:flex-end"><div style="flex:1"><label>ID</label><input data-f="id" value="${esc(c.id)}" ${c._new ? '' : 'disabled title="ID существующего критерия не меняется — иначе оценки не сопоставятся"'}></div>
+        <div style="flex:3"><label>Название</label><input data-f="title" value="${esc(c.title)}"></div></div>
+      <div class="row" style="gap:12px;align-items:flex-end"><div style="flex:2"><label>Секция</label><input data-f="section" list="sec-list" value="${esc(c.section)}"><datalist id="sec-list">${secs}</datalist></div>
+      <div style="flex:1"><label>Тип ответа</label><select data-f="type"><option value="binary" ${c.type === 'binary' ? 'selected' : ''}>Да / Нет</option><option value="scale" ${c.type === 'scale' ? 'selected' : ''}>Числовая шкала</option><option value="flag" ${c.type === 'flag' ? 'selected' : ''}>Флаг (без баллов)</option></select></div>
+      <div style="flex:1"><label>Вес</label><input type="number" min="0" step="0.5" data-f="weight" value="${c.weight}" ${c.type === 'flag' ? 'disabled' : ''}></div></div>
+      <label><input type="checkbox" data-f="na_allowed" style="width:auto" ${c.na_allowed ? 'checked' : ''} ${c.type === 'flag' ? 'disabled' : ''}> Разрешить N/A</label>
       <label>Правило оценки</label><textarea rows="2" data-f="rule">${esc(c.rule)}</textarea>
-      <label>Условие N/A</label><textarea rows="2" data-f="naRule">${esc(c.naRule || '')}</textarea>
-      ${c.type === 'scale' ? `<label>Шкала (по строке: значение|описание, максимум = полный вес)</label><textarea rows="5" data-f="steps">${esc(steps)}</textarea>` : ''}
-      <label>Ключевые слова для демо-оценщика (через запятую)</label><input data-f="keywords" value="${esc(c.keywords || '')}">
-      <div style="margin-top:12px"><button class="btn danger sm" data-act="delcrit" data-c="${c.id}">Удалить критерий</button></div></div>`;
+      ${c.na_allowed ? `<label>Условие N/A</label><textarea rows="2" data-f="na_condition">${esc(c.na_condition)}</textarea>` : ''}
+      ${c.type === 'scale' ? `<label>Шкала (по строке: значение|описание, верхняя ступень = полный вес)</label><textarea rows="5" data-f="scale">${esc(scale)}</textarea>` : ''}
+      ${c.type === 'flag' ? `<label>Типы нарушений (через запятую)</label><input data-f="flag_types" value="${esc((c.flag_types || []).join(', '))}">` : ''}
+      <label>Пояснение для модели</label><textarea rows="3" data-f="guidance" placeholder="Как применять правило в спорных случаях">${esc(c.guidance)}</textarea>
+      <div class="row" style="gap:12px;align-items:flex-start"><div style="flex:1"><label>Примеры «Да» (по строке)</label><textarea rows="2" data-f="examples_pass">${lines(c.examples_pass)}</textarea></div>
+        <div style="flex:1"><label>Примеры «Нет» (по строке)</label><textarea rows="2" data-f="examples_fail">${lines(c.examples_fail)}</textarea></div></div>
+      <div style="margin-top:12px"><button class="btn danger sm" data-act="delcrit" data-c="${esc(c.id)}">Удалить критерий</button></div></div>`;
   }
+  const cleanDraft = () => { const d = clone(draft); d.criteria.forEach((c) => delete c._new); return d; };
 
-  /* ---------- Модалка апелляции ---------- */
-  function appealModal(convId, critId) {
-    const x = S.results[convId], c = x.checklist.criteria.find((q) => q.id === critId), it = x.items[critId];
-    $('#modal-host').innerHTML = `<div class="modal-bg" data-act="closemodal"><div class="panel modal" data-stop="1"><h2>Оспорить критерий</h2>
-      <p><b>${esc(c.title)}</b> — ${esc(ansLabel(c, Scoring.finalAnswer(it)))}</p><div class="quote">${esc(it.explanation)}</div>
-      <label>Комментарий</label><textarea id="ap-text" rows="4" placeholder="Почему вы не согласны с оценкой?"></textarea>
-      <div class="row" style="margin-top:12px"><button class="btn primary" data-act="sendappeal" data-id="${esc(convId)}" data-c="${critId}">Сохранить обращение</button><button class="btn" data-act="closemodal">Отмена</button></div></div></div>`;
+  /* ---------- Аналитика ---------- */
+  function viewAnalytics() {
+    if (!R.online) return offline();
+    const a = R.analytics;
+    if (!a) return '<div class="panel empty">Загрузка…</div>';
+    const head = `<div class="row" style="margin-bottom:14px"><h2 style="color:var(--text)">Аналитика${S.dataset ? ` · ${esc(S.dataset)}` : ' · все наборы'}</h2><div class="spacer"></div><button class="btn" data-act="reload-analytics">Обновить</button></div>`;
+    if (!a.evaluated) return head + '<div class="panel empty">Нет данных: оцените диалоги на вкладке «Диалоги».</div>';
+    const kpi = (label, value, extra = '') => `<div class="panel kpi"><div class="small">${label}</div><b class="${extra}">${value}</b></div>`;
+    const group = (title, obj) => `<div class="panel"><h2>${title}</h2><table><thead><tr><th></th><th>Диалогов</th><th>Средний итог</th></tr></thead><tbody>${Object.entries(obj).map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td>${v.count}</td><td><span class="score ${cls(v.avg_total)}" style="font-size:15px">${fmt(v.avg_total)}</span><div class="bar"><i style="width:${v.avg_total || 0}%"></i></div></td></tr>`).join('')}</tbody></table></div>`;
+    const crit = a.criteria.map((c) => `<tr><td><b>${esc(c.title)}</b><div class="small">${esc(c.id)} · ${TYPE[c.type] || c.type}</div></td><td>${c.evaluated}</td><td>${c.na_share === null ? '—' : fmt(c.na_share) + '%'}</td>
+      <td>${c.type === 'flag' ? `<span class="tag ${c.flags ? 'red' : 'green'}">флагов: ${c.flags}</span>` : c.avg_fulfillment_pct === null ? '—' : `${fmt(c.avg_fulfillment_pct)}%<div class="bar"><i style="width:${c.avg_fulfillment_pct}%"></i></div>`}</td><td>${c.errors || ''}</td></tr>`).join('');
+    const worst = a.worst.map((w) => `<tr class="click" data-act="open" data-id="${esc(w.conversation_id)}" data-eval="${w.evaluation_id}"><td><b>${esc(w.conversation_id)}</b></td><td><span class="score ${cls(w.total)}">${fmt(w.total)}</span></td></tr>`).join('');
+    return `${head}<div class="kpis">${kpi('Оценено диалогов', a.evaluated)}${kpi('Средний итог', fmt(a.avg_total), 'score ' + cls(a.avg_total))}${kpi('Грубые ошибки', a.gross_errors, a.gross_errors ? 'score lo' : '')}</div>
+      <div class="grid2" style="margin-top:18px">${group('По языкам', a.by_language)}${group('По каналам', a.by_channel)}</div>
+      <div class="grid2" style="margin-top:18px"><div class="panel"><h2>По критериям</h2><table><thead><tr><th>Критерий</th><th>Оценено</th><th>N/A</th><th>Выполнение</th><th>Ошибок</th></tr></thead><tbody>${crit}</tbody></table></div>
+      <div class="panel"><h2>5 худших диалогов</h2><table><tbody>${worst || '<tr><td class="small">Нет данных</td></tr>'}</tbody></table></div></div>`;
   }
 
   /* ---------- рендер ---------- */
   function render() {
     renderNav();
     const v = S.ui.view;
-    $('#view').innerHTML = v === 'dialogs' ? viewDialogs() : v === 'card' ? viewCard() : v === 'appeals' ? viewAppeals() : viewChecklist();
+    $('#view').innerHTML = v === 'dialogs' ? viewDialogs() : v === 'card' ? viewCard() : v === 'appeals' ? viewAppeals() : v === 'checklist' ? viewChecklist() : viewAnalytics();
     if (v === 'card') setupAudio();
     save();
   }
+  function renderJob() { const box = $('.jobbox'); if (box && S.ui.view === 'dialogs') box.outerHTML = jobBox(); }
 
-  /* Аудио: audio_url у организаторов — это адрес Power Automate (не статичный файл), поэтому
-   * 1) пробуем играть напрямую, 2) при ошибке забираем через fetch и собираем Blob
-   *    (понимает JSON вида {"$content-type","$content"} с base64), 3) иначе — ссылка «Открыть запись».
-   * S.audioProxy — шаблон прокси бэкенда, например /api/audio?url={url} (решает CORS). */
+  /* Аудио идёт через прокси бэкенда /api/audio/{id}: он достаёт mp3 со страницы организаторов и поддерживает перемотку */
+  const SHIFT_DEFAULT = -3; // метка реплики — момент распознанной фразы, сама фраза звучала раньше
+  const shiftOf = (id) => ((S.audioShift || {})[id] ?? SHIFT_DEFAULT);
+  const offsetOf = (i) => { const m = R.conv && R.conv.transcript[i - 1]; return (m && m.offset_sec) || 0; };
   function setupAudio() {
-    const r = rec(S.ui.cardId), p = $('#player'), msg = $('#audio-msg');
-    if (!r || !r.audio_url || !p) return;
-    const src = S.audioProxy ? S.audioProxy.replace('{url}', encodeURIComponent(r.audio_url)) : r.audio_url;
-    const link = `<a href="${esc(r.audio_url)}" target="_blank" rel="noopener" style="color:var(--gold)">Открыть запись в новой вкладке</a>`;
-    msg.innerHTML = link;
-    const sh = $('#shift'); if (sh) sh.value = shiftOf(r.conversation_id);
-    let tried = false;
-    const fail = (why) => { msg.innerHTML = `Встроенный плеер не смог воспроизвести запись (${esc(why)}). ${link}`; };
-    const viaBlob = async () => {
-      if (tried) return fail('повторная ошибка'); tried = true; msg.textContent = 'Загружаю запись…';
-      try {
-        const resp = await fetch(src); if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const ct = (resp.headers.get('content-type') || '').toLowerCase();
-        let blob;
-        if (/json|text\/|html|xml/.test(ct) || !ct) {
-          const txt = await resp.text();
-          let b64 = null, mime = '', url = null;
-          const sniff = (u8) => { const s = String.fromCharCode(...u8.slice(0, 12)); return s.startsWith('ID3') || (u8[0] === 0xff && (u8[1] & 0xe0) === 0xe0) ? 'audio/mpeg' : s.startsWith('RIFF') ? 'audio/wav' : s.startsWith('OggS') ? 'audio/ogg' : s.slice(4, 8) === 'ftyp' ? 'audio/mp4' : s.startsWith('fLaC') ? 'audio/flac' : ''; };
-          const walk = (o) => {
-            if (b64 || o === null || o === undefined) return;
-            if (typeof o === 'string') {
-              const s = o.trim(); let m;
-              if ((m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(s))) { mime = m[1] || mime; b64 = m[3]; return; }
-              if (/^[\[{]/.test(s)) { try { walk(JSON.parse(s)); return; } catch (e) {} }
-              if (s.length > 1000 && /^[A-Za-z0-9+/_\-=\s]+$/.test(s)) { b64 = s; return; }
-              if (!url && /^https?:\/\//i.test(s)) url = s;
-              return;
-            }
-            if (typeof o === 'object') { ['$content-type', 'contentType', 'content-type', 'mimeType'].forEach((k) => { if (typeof o[k] === 'string') mime = o[k]; }); Object.values(o).forEach(walk); }
-          };
-          let j = null; try { j = JSON.parse(txt); } catch (e) {}
-          if (j !== null) walk(j);
-          if (!b64 && !url) { const h = /<(?:audio|source)[^>]+src=["']([^"']+)["']/i.exec(txt) || /href=["']([^"']+\.(?:mp3|wav|ogg|m4a|aac|webm)[^"']*)["']/i.exec(txt); if (h) url = new URL(h[1], src).href; }
-          if (b64) {
-            const bin = atob(b64.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/')), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-            blob = new Blob([u8], { type: mime || sniff(u8) || 'audio/mpeg' });
-          } else if (url) {
-            p.addEventListener('error', () => fail('ссылка из ответа не воспроизводится'), { once: true }); p.src = url; msg.innerHTML = link; return;
-          } else throw new Error(`в ответе нет аудио. Content-Type: ${ct || '—'}; начало ответа: ${txt.slice(0, 160).replace(/\s+/g, ' ')}`);
-        } else blob = await resp.blob();
-        p.src = URL.createObjectURL(blob); msg.innerHTML = link;
-      } catch (e) { fail(/Failed to fetch/.test(e.message) ? 'CORS: нужен прокси бэкенда' : e.message); }
-    };
-    p.addEventListener('error', viaBlob, { once: true });
-    p.src = src;
+    const p = $('#player'), msg = $('#audio-msg'); if (!p || !R.conv) return;
+    p.addEventListener('error', () => { msg.innerHTML = `Не удалось загрузить запись через бэкенд. <a href="${esc(R.conv.audio_url)}" target="_blank" rel="noopener" style="color:var(--gold)">Открыть запись в новой вкладке</a>`; }, { once: true });
   }
-  const go = (v) => { S.ui.view = v; if (v === 'checklist') draft = null; render(); window.scrollTo(0, 0); };
+
+  const go = async (v) => {
+    S.ui.view = v; if (v === 'checklist') { draft = null; }
+    render(); window.scrollTo(0, 0);
+    try {
+      if (v === 'appeals') { await loadAppeals(); render(); }
+      if (v === 'analytics') { R.analytics = null; render(); R.analytics = await api('/analytics' + qs({ dataset: S.dataset })); render(); }
+      if (v === 'checklist' && R.online) { [R.versions, R.active] = await Promise.all([api('/checklists'), api('/checklists/active')]); draft = null; render(); }
+      if (v === 'dialogs' && R.online) { await loadConvs(); render(); }
+    } catch (e) { toast('Ошибка: ' + e.message); render(); }
+  };
+  async function loadAppeals() { R.appeals = await api('/appeals' + qs({ status: S.appealFilter })); R.openAppeals = S.appealFilter === 'open' ? R.appeals.length : R.openAppeals; }
   function jump(i) { const el = $('#m-' + i); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
-  function loadRecords(json) {
-    const recs = Array.isArray(json) ? json : json && json.data && json.data.records;
-    if (!recs || !recs.length) throw new Error('В ответе нет data.records');
-    S.records = recs; S.results = {}; S.appeals = []; S.dataSource = 'local'; S.ui.cardId = null; S.audioShift = {}; indexRecords();
+
+  async function runBatch(mode, onlyMissing) {
+    if (mode === 'evaluate' && !onlyMissing && !confirm('Переоценить все диалоги набора заново? Это расходует лимит запросов к модели.')) return;
+    try {
+      R.job = await post('/evaluate/batch', { dataset: S.dataset || null, mode, only_missing: !!onlyMissing });
+      lastDiff = null; S.ui.view = 'dialogs'; render(); toast(mode === 'reapply' ? 'Применение чек-листа запущено' : 'Пакетная оценка запущена'); pollJob();
+    } catch (e) { toast('Ошибка: ' + e.message); }
+  }
+  async function pollJob() {
+    clearTimeout(pollTimer);
+    if (!R.job) return;
+    try {
+      R.job = await api(`/jobs/${R.job.id}`); renderJob();
+      if (R.job.status === 'running') { pollTimer = setTimeout(pollJob, 2500); return; }
+      await loadConvs(); render();
+      toast(`Готово: ${R.job.done.length}, пропущено: ${R.job.skipped.length}, ошибок: ${R.job.failed.length}`);
+    } catch (e) { toast('Потеряна связь с задачей: ' + e.message); }
+  }
+  function download(name, data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function afterImport(res) {
+    S.dataset = res.dataset; await loadBase(); render();
+    toast(`Импортировано: ${res.imported}${res.skipped ? `, пропущено: ${res.skipped}` : ''} (набор ${res.dataset})`);
   }
 
   /* ---------- события ---------- */
@@ -333,81 +369,135 @@
     const t = e.target.closest('[data-act]'); if (!t || !$('#cqa-root').contains(t)) return;
     if (t.dataset.act === 'closemodal' && e.target.closest('[data-stop]') && !e.target.closest('button')) return;
     const a = t.dataset.act, id = t.dataset.id;
-    if (a === 'nav') return go(t.dataset.v);
-    if (a === 'open') { S.ui.cardId = id; return go('card'); }
-    if (a === 'demo') { loadRecords(window.DEMO_RECORDS); toast('Загружено демо: ' + S.records.length); return render(); }
-    if (a === 'loadurl') {
-      const url = $('#api-url').value.trim(); S.apiUrl = url; if (!url) return toast('Вставьте URL');
-      try { const r = await fetch(url); const j = await r.json(); if (j.isSuccess === false) throw new Error(j.error || 'isSuccess=false'); loadRecords(j); toast('Загружено записей: ' + S.records.length); }
-      catch (err) { toast('Не удалось загрузить (CORS?). Используйте файл JSON. ' + err.message); }
-      return render();
-    }
-    if (a === 'evalone') { e.stopPropagation(); await evaluateMany([id]); return; }
-    if (a === 'evalall') return evaluateMany(S.records.map((r) => r.conversation_id));
-    if (a === 'export-results') return exportResults();
-    if (a === 'backend-load') return loadBackend();
-    if (a === 'jump') return jump(+t.dataset.i);
-    if (a === 'seek') { const p = $('#player'), r = rec(S.ui.cardId); if (p && r) { S.ui.lastSeek = +t.dataset.i; p.currentTime = Math.max(0, offsetSec(r, +t.dataset.i) + shiftOf(r.conversation_id)); p.play().catch(() => {}); } return jump(+t.dataset.i); }
-    if (a === 'syncpos') { const p = $('#player'), r = rec(S.ui.cardId), i = S.ui.lastSeek; if (!p || !r || i === undefined) return toast('Сначала нажмите ▶ у реплики'); S.audioShift = S.audioShift || {}; S.audioShift[r.conversation_id] = Math.round((p.currentTime - offsetSec(r, i)) * 10) / 10; $('#shift').value = S.audioShift[r.conversation_id]; save(); return toast('Сдвиг сохранён: ' + S.audioShift[r.conversation_id] + ' с'); }
-    if (a === 'resetshift') { const r = rec(S.ui.cardId); if (S.audioShift) delete S.audioShift[r.conversation_id]; $('#shift').value = SHIFT_DEFAULT; return save(); }
-    if (a === 'appeal') return appealModal(id, t.dataset.c);
-    if (a === 'closemodal') { $('#modal-host').innerHTML = ''; return; }
-    if (a === 'sendappeal') {
-      const text = $('#ap-text').value.trim(); if (!text) return toast('Добавьте комментарий');
-      const ap = { id: 'ap-' + Date.now(), convId: id, critId: t.dataset.c, comment: text, status: 'open', createdAt: new Date().toISOString() };
-      S.appeals.push(ap); S.ui.appealId = ap.id; $('#modal-host').innerHTML = ''; toast('Апелляция сохранена'); return render();
-    }
-    if (a === 'pick') { S.ui.appealId = id; return render(); }
-    if (a === 'decide') {
-      const ap = S.appeals.find((q) => q.id === S.ui.appealId), reason = $('#rv-reason').value.trim(); if (!reason) return toast('Укажите причину');
-      const it = S.results[ap.convId].items[ap.critId], raw = $('#rv-ans').value;
-      let ans = t.dataset.mode === 'keep' ? it.answer : raw === 'yes' || raw === 'no' || raw === 'na' ? raw : Number(raw);
-      it.decision = { answer: ans, reason, mode: t.dataset.mode, at: new Date().toISOString() };
-      ap.status = 'resolved'; ap.resolution = (t.dataset.mode === 'keep' ? 'Оценка подтверждена. ' : 'Оценка изменена. ') + reason;
-      toast('Решение сохранено, итог пересчитан'); return render();
-    }
-    if (a === 'editpick') { S.ui.editCrit = t.dataset.c; return render(); }
-    if (a === 'addcrit') { const c = { id: 'c' + Date.now(), section: 'Новая секция', title: 'Новый критерий', type: 'yesno', weight: 10, na: false, rule: 'Да — …', naRule: '' }; draft.criteria.push(c); S.ui.editCrit = c.id; return render(); }
-    if (a === 'delcrit') { draft.criteria = draft.criteria.filter((c) => c.id !== t.dataset.c); S.ui.editCrit = null; return render(); }
-    if (a === 'resetdraft') { draft = null; return render(); }
-    if (a === 'savecl') {
-      const cl = clone(draft); cl.version = activeCl().version + 1; S.checklists = S.checklists.map((c) => (c.id === cl.id ? cl : c)); S.activeCl = cl.id; draft = null; toast('Чек-лист сохранён: v' + cl.version); return render();
-    }
-    if (a === 'applycl') {
-      const cl = clone(draft); cl.version = activeCl().version + 1; S.checklists = S.checklists.map((c) => (c.id === cl.id ? cl : c)); draft = null;
-      await evaluateMany(S.records.map((r) => r.conversation_id)); return go('dialogs');
-    }
+    try {
+      if (a === 'nav') return go(t.dataset.v);
+      if (a === 'connect') { S.backendUrl = $('#backend-url').value.trim().replace(/\/$/, ''); R.online = null; render(); await loadBase(); render(); return toast(R.online ? 'Бэкенд подключён' : 'Бэкенд недоступен'); }
+      if (a === 'open') { await openCard(id, t.dataset.eval ? +t.dataset.eval : null); return go('card'); }
+      if (a === 'import-group') {
+        const g = $('#import-group').value.trim(); if (!g) return toast('Укажите group_id'); S.importGroup = g;
+        t.disabled = true; t.textContent = 'Импорт…';
+        return afterImport(await post('/datasets/import', { group_id: g }));
+      }
+      if (a === 'import-url') {
+        const url = $('#import-url').value.trim(); if (!/^https:\/\//.test(url)) return toast('Нужна ссылка https://…');
+        t.disabled = true; t.textContent = 'Загрузка…';
+        const g = $('#import-group').value.trim();
+        return afterImport(await post('/datasets/import', { url, group_id: /group_id=/.test(url) ? null : g || null }));
+      }
+      if (a === 'evalone') {
+        e.stopPropagation(); t.disabled = true; t.textContent = 'Оценка…'; toast('Модель анализирует диалог…');
+        const card = await post('/evaluate', { conversation_id: id });
+        await openCard(id, card.evaluation.id); await loadConvs();
+        toast(`Итог: ${fmt(card.final.total)}`); return go('card');
+      }
+      if (a === 'reapply') {
+        t.disabled = true; t.textContent = 'Применение…';
+        const card = await post(`/evaluations/${R.card.evaluation.id}/reapply`);
+        await openCard(R.conv.id, card.evaluation.id); await loadConvs(); render();
+        return toast(card.reapply.llm_called ? `Переоценены: ${card.reapply.diff.needs_llm.join(', ') || 'критерии без ответа'}` : 'Пересчитано без вызова модели');
+      }
+      if (a === 'batch') return runBatch(t.dataset.mode, t.dataset.missing === '1');
+      if (a === 'closejob') { R.job = null; return render(); }
+      if (a === 'export') {
+        const m = S.exportMeta; if (!m.teamName.trim()) { toast('Укажите название команды'); return $('#export-team').focus(); }
+        const data = await api('/export' + qs({ dataset: S.dataset, team_name: m.teamName.trim(), model_mode: m.modelMode, model_name: m.modelName.trim() }));
+        if (!data.results.length) return toast('Нет данных: сначала оцените диалоги');
+        download(`cqa-results-${S.dataset || 'all'}-${new Date().toISOString().slice(0, 10)}.json`, data);
+        return toast(`Скачан JSON: ${data.results.length} оценок`);
+      }
+      if (a === 'jump') return jump(+t.dataset.i);
+      if (a === 'seek') { const p = $('#player'); if (p && R.conv) { S.ui.lastSeek = +t.dataset.i; p.currentTime = Math.max(0, offsetOf(+t.dataset.i) + shiftOf(R.conv.id)); p.play().catch(() => {}); } return jump(+t.dataset.i); }
+      if (a === 'syncpos') { const p = $('#player'), i = S.ui.lastSeek; if (!p || !R.conv || i === undefined) return toast('Сначала нажмите ▶ у реплики'); S.audioShift[R.conv.id] = Math.round((p.currentTime - offsetOf(i)) * 10) / 10; $('#shift').value = S.audioShift[R.conv.id]; save(); return toast('Сдвиг сохранён: ' + S.audioShift[R.conv.id] + ' с'); }
+      if (a === 'resetshift') { delete S.audioShift[R.conv.id]; $('#shift').value = SHIFT_DEFAULT; return save(); }
+      if (a === 'appeal') return appealModal(t.dataset.c);
+      if (a === 'closemodal') { $('#modal-host').innerHTML = ''; return; }
+      if (a === 'sendappeal') {
+        const text = $('#ap-text').value.trim(); if (!text) return toast('Добавьте комментарий');
+        const ap = await post(`/evaluations/${R.card.evaluation.id}/appeals`, { criterion_id: t.dataset.c, comment: text });
+        $('#modal-host').innerHTML = ''; S.ui.appealId = ap.id; await Promise.all([refreshCard(), loadOpenCount(), loadConvs()]); render();
+        return toast('Апелляция подана — она в очереди проверяющего');
+      }
+      if (a === 'appfilter') { S.appealFilter = t.dataset.v; await loadAppeals(); return render(); }
+      if (a === 'pick') { S.ui.appealId = +id; return render(); }
+      if (a === 'decide') {
+        const reason = $('#rv-reason').value.trim(); if (!reason) return toast('Укажите причину');
+        const body = { decision: t.dataset.mode, reason };
+        if (t.dataset.mode === 'changed') { const v = $('#rv-ans').value; if (v === 'na') body.na = true; else body.value = Number(v); }
+        const res = await post(`/appeals/${S.ui.appealId}/resolve`, body);
+        await Promise.all([loadAppeals(), loadOpenCount(), loadConvs()]); if (!R.appeals.some((x) => x.id === S.ui.appealId)) { S.appealFilter = ''; await loadAppeals(); }
+        render(); return toast(`Решение сохранено. Итог: ${fmt(res.original_total)} → ${fmt(res.final_total)}`);
+      }
+      if (a === 'editpick') { S.ui.editCrit = t.dataset.c; return render(); }
+      if (a === 'addcrit') { const c = newCriterion(); draft.criteria.push(c); S.ui.editCrit = c.id; return render(); }
+      if (a === 'delcrit') { if (!confirm('Удалить критерий из чек-листа? Изменение вступит в силу после сохранения.')) return; draft.criteria = draft.criteria.filter((c) => c.id !== t.dataset.c); S.ui.editCrit = null; return render(); }
+      if (a === 'resetdraft') { draft = null; return render(); }
+      if (a === 'closediff') { lastDiff = null; return render(); }
+      if (a === 'savecl') {
+        const res = await post('/checklists', { data: cleanDraft(), comment: $('#cl-comment').value.trim() });
+        lastDiff = res.diff; R.clCache[res.checklist.id] = res.checklist; draft = null;
+        [R.versions, R.active] = await Promise.all([api('/checklists'), api('/checklists/active')]);
+        render(); window.scrollTo(0, 0); return toast(`Сохранена версия v${res.checklist.version}`);
+      }
+      if (a === 'saveweights') {
+        const base = Object.fromEntries(R.active.data.criteria.map((c) => [c.id, c.weight]));
+        const weights = Object.fromEntries(draft.criteria.filter((c) => c.id in base && +c.weight !== base[c.id]).map((c) => [c.id, +c.weight]));
+        if (!Object.keys(weights).length) return toast('Веса не изменены');
+        const res = await api('/checklists/active/weights', { method: 'PATCH', body: JSON.stringify({ weights, reapply_all: true, comment: $('#cl-comment').value.trim() }) });
+        draft = null; [R.versions, R.active] = await Promise.all([api('/checklists'), api('/checklists/active')]); await loadConvs(); render();
+        return toast(`Сохранена v${res.checklist.version}. Пересчитано оценок: ${res.reapplied.done} — без вызова модели`);
+      }
+      if (a === 'activate') {
+        await post(`/checklists/${id}/activate`); [R.versions, R.active] = await Promise.all([api('/checklists'), api('/checklists/active')]); draft = null; render();
+        return toast(`Активна версия v${R.active.version}. Чтобы пересчитать оценки, нажмите «Применить активный чек-лист»`);
+      }
+      if (a === 'reload-analytics') return go('analytics');
+    } catch (err) { toast('Ошибка: ' + err.message); render(); }
   });
 
   document.addEventListener('input', (e) => {
-    const f = e.target.dataset;
-    if (e.target.id === 'endpoint') { S.endpoint = e.target.value.trim(); return save(); }
-    if (e.target.id === 'backend-url') { S.backendUrl = e.target.value.trim(); return save(); }
-    if (e.target.id === 'backend-dataset') { S.dataset = e.target.value.trim(); return save(); }
-    if (e.target.id === 'export-team') { S.exportMeta.teamName = e.target.value; return save(); }
-    if (e.target.id === 'export-mode') { S.exportMeta.modelMode = e.target.value; return save(); }
-    if (e.target.id === 'export-model') { S.exportMeta.modelName = e.target.value; return save(); }
-    if (e.target.id === 'shift') { const r = rec(S.ui.cardId); S.audioShift = S.audioShift || {}; S.audioShift[r.conversation_id] = Number(e.target.value) || 0; return save(); }
-    if (e.target.id === 'audioproxy') { S.audioProxy = e.target.value.trim(); return save(); }
-    if (f.cl === 'name') { draft.name = e.target.value; return; }
-    if (!f.f) return;
-    const c = draft.criteria.find((q) => q.id === e.target.closest('[data-crit]').dataset.crit);
-    let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    if (f.f === 'weight') v = Number(v) || 0;
-    if (f.f === 'steps') { c.steps = String(v).split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [n, ...r] = l.split('|'); return { v: Number(n), label: r.join('|').trim() }; }).filter((s) => !isNaN(s.v)); return; }
-    c[f.f] = v;
-    if (f.f === 'type') { if (v === 'scale' && !(c.steps || []).length) c.steps = [{ v: 10, label: 'Полностью' }, { v: 5, label: 'Частично' }, { v: 0, label: 'Нет' }]; if (v === 'flag') { c.weight = 0; c.na = false; } render(); }
+    const el = e.target, f = el.dataset;
+    const setters = { 'backend-url': (v) => { S.backendUrl = v.trim(); }, 'import-group': (v) => { S.importGroup = v; }, 'import-url': (v) => { S.importUrl = v; }, 'export-team': (v) => { S.exportMeta.teamName = v; }, 'export-model': (v) => { S.exportMeta.modelName = v; } };
+    if (setters[el.id]) { setters[el.id](el.value); return save(); }
+    if (el.id === 'shift' && R.conv) { S.audioShift[R.conv.id] = Number(el.value) || 0; return save(); }
+    if (f.cl === 'name') { draft.name = el.value; return; }
+    if (!f.f || !draft) return;
+    const c = draft.criteria.find((q) => q.id === el.closest('[data-crit]').dataset.crit); if (!c) return;
+    const v = el.type === 'checkbox' ? el.checked : el.value;
+    if (f.f === 'weight') c.weight = Number(v) || 0;
+    else if (f.f === 'scale') c.scale = String(v).split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [n, ...r] = l.split('|'); return { value: Number(n), description: r.join('|').trim() }; }).filter((s) => !isNaN(s.value));
+    else if (f.f === 'examples_pass' || f.f === 'examples_fail') c[f.f] = String(v).split('\n').map((l) => l.trim()).filter(Boolean);
+    else if (f.f === 'flag_types') c.flag_types = String(v).split(',').map((s) => s.trim()).filter(Boolean);
+    else if (f.f === 'id') { c.id = v.trim(); S.ui.editCrit = c.id; el.closest('[data-crit]').dataset.crit = c.id; }
+    else c[f.f] = v;
+    if (f.f === 'title' || f.f === 'weight') { const item = $(`.list-item.on`); if (item) { item.querySelector('b').textContent = c.title; } }
   });
-  document.addEventListener('change', (e) => {
-    if (e.target.id === 'cl-select') { S.activeCl = e.target.value; render(); }
-    if (e.target.id === 'export-mode') { S.exportMeta.modelMode = e.target.value; save(); }
-    if (e.target.id === 'file-in' && e.target.files[0]) {
-      const fr = new FileReader();
-      fr.onload = () => { try { loadRecords(JSON.parse(fr.result)); toast('Загружено записей: ' + S.records.length); } catch (err) { toast('Ошибка файла: ' + err.message); } render(); };
-      fr.readAsText(e.target.files[0]);
-    }
+  document.addEventListener('change', async (e) => {
+    const el = e.target, f = el.dataset;
+    try {
+      if (el.id === 'export-mode') { S.exportMeta.modelMode = el.value; return save(); }
+      if (el.id === 'ds-select') { S.dataset = el.value; await loadConvs(); return render(); }
+      if (el.id === 'cl-select') { const v = R.versions.find((x) => String(x.id) === el.value); if (v && !v.is_active) { await post(`/checklists/${v.id}/activate`); [R.versions, R.active] = await Promise.all([api('/checklists'), api('/checklists/active')]); render(); toast(`Активна v${v.version}. Нажмите «Применить активный чек-лист», чтобы перенести оценки`); } return; }
+      if (el.id === 'eval-select') { await openCard(R.conv.id, +el.value); return render(); }
+      if (f.f === 'type' || f.f === 'na_allowed' || f.f === 'weight') {
+        const c = draft.criteria.find((q) => q.id === el.closest('[data-crit]').dataset.crit);
+        if (f.f === 'type') {
+          if (c.type === 'scale' && !(c.scale || []).length) c.scale = [{ value: 10, description: 'Полностью' }, { value: 5, description: 'Частично' }, { value: 0, description: 'Нет' }];
+          if (c.type === 'flag') { c.weight = 0; c.na_allowed = false; if (!(c.flag_types || []).length) c.flag_types = []; }
+        }
+        return render();
+      }
+      if (el.id === 'file-in' && el.files[0]) {
+        const fd = new FormData(); fd.append('file', el.files[0]);
+        toast('Загружаю файл…'); el.value = '';
+        return afterImport(await api('/datasets/upload', { method: 'POST', body: fd }));
+      }
+    } catch (err) { toast('Ошибка: ' + err.message); render(); }
   });
 
-  if (!S.records.length) loadRecords(window.DEMO_RECORDS); else indexRecords();
   render();
+  loadBase().then(async () => {
+    if (S.ui.view === 'card' && S.ui.cardId) { try { await openCard(S.ui.cardId); } catch (e) { S.ui.cardId = null; } }
+    if (S.ui.view === 'appeals' || S.ui.view === 'analytics') return go(S.ui.view);
+    render();
+  });
 })();

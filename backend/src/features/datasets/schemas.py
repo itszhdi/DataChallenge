@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Message(BaseModel):
@@ -16,7 +16,15 @@ class Record(BaseModel):
 
 
 class ImportRequest(BaseModel):
-    group_id: str = Field(min_length=1, max_length=64)
+    group_id: str | None = Field(None, min_length=1, max_length=64)
+    # * Полная ссылка (если организаторы дали другой URL); иначе берётся DATASET_API_URL + group_id
+    url: str | None = Field(None, pattern=r"^https://")
+
+    @model_validator(mode="after")
+    def check_source(self) -> "ImportRequest":
+        if not self.group_id and not self.url:
+            raise ValueError("нужен group_id или url")
+        return self
 
 
 class ImportResult(BaseModel):

@@ -51,12 +51,14 @@ def import_payload(payload: Any, dataset: str | None = None) -> ImportResult:
     return ImportResult(dataset=dataset, imported=imported, skipped=len(errors), errors=errors)
 
 
-async def fetch_and_import(group_id: str) -> ImportResult:
-    base = get_settings().dataset_api_url
-    if not base:
-        raise DatasetSourceNotConfigured()
-    url = dataset_url(base, group_id)
-    logger.info("Fetching dataset group_id=%s", group_id)
+async def fetch_and_import(group_id: str | None, url: str | None = None) -> ImportResult:
+    custom = url is not None
+    if not url:
+        base = get_settings().dataset_api_url
+        if not base:
+            raise DatasetSourceNotConfigured()
+        url = dataset_url(base, group_id)
+    logger.info("Fetching dataset group_id=%s custom_url=%s", group_id, custom)
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.get(url)

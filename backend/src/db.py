@@ -136,7 +136,7 @@ def get_conversation(conversation_id: str) -> dict[str, Any] | None:
 def list_conversations(dataset: str | None = None) -> list[dict[str, Any]]:
     # * Список без транскрипта + id последней оценки и число открытых апелляций по ней
     sql = """
-        SELECT c.id, c.dataset, c.channel, c.language, c.audio_url, c.imported_at,
+        SELECT c.id, c.dataset, c.channel, c.language, c.audio_url, c.imported_at, json_array_length(c.transcript) AS messages,
                (SELECT e.id FROM evaluations e WHERE e.conversation_id = c.id ORDER BY e.id DESC LIMIT 1) AS last_evaluation_id
         FROM conversations c {where} ORDER BY c.id
     """

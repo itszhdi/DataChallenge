@@ -25,7 +25,7 @@ make test                    # тесты
 make docker-up               # то же в Docker (SQLite в volume)
 ```
 
-Swagger отключён намеренно.
+Swagger отключён намеренно. Фронтенд: откройте `../frontend/index.html` в браузере, адрес API по умолчанию `http://localhost:8000/api`.
 
 ## .env
 
@@ -48,7 +48,7 @@ Swagger отключён намеренно.
 |---|---|---|
 | GET | `/health` | Провайдер и модель |
 | GET | `/datasets` | Загруженные наборы |
-| POST | `/datasets/import` `{"group_id":"DEV"}` | Импорт из API организаторов |
+| POST | `/datasets/import` `{"group_id":"DEV"}` или `{"url":"https://..."}` | Импорт из API организаторов (по group_id или по полной ссылке) |
 | POST | `/datasets/upload?dataset=` (multipart `file`) | Импорт из JSON-файла того же формата |
 | GET | `/conversations?dataset=` | Список: язык, канал, последняя оценка, итог, грубые ошибки, открытые апелляции |
 | GET | `/conversations/{id}` | Диалог (`index`, `offset_sec` у реплик) и история оценок |
@@ -66,6 +66,8 @@ Swagger отключён намеренно.
 | POST | `/appeals/{id}/resolve` `{"decision":"upheld"\|"changed","reason","value","na"}` | Решение → `original_total`, `final_total` |
 | GET | `/analytics?dataset=` | Средний итог, разбивка по языкам/каналам/критериям, грубые ошибки, 5 худших |
 | GET | `/prompt/{conversation_id}` | Промпт и JSON-схема без вызова модели (отладка) |
+| GET | `/export?dataset=&team_name=&model_mode=&model_name=` | JSON с финальными оценками (с учётом апелляций) |
+| GET | `/audio/{conversation_id}` | Прокси записи звонка: достаёт mp3 со страницы организаторов, поддерживает Range (перемотка) |
 
 ### Сценарий защиты: заменить критерий
 1. `GET /checklists/active` → изменить `rule`/`scale` критерия или добавить новый → `POST /checklists`. В ответе `diff.needs_llm` показывает, какие критерии уйдут в модель.

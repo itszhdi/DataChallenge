@@ -44,7 +44,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-multipart" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "uvloop" },
 ]
 
 [package.dev-dependencies]
@@ -62,7 +61,6 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.16.2" },
     { name = "python-multipart", specifier = ">=0.0.33" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
-    { name = "uvloop", specifier = ">=0.23.0" },
 ]
 
 [package.metadata.requires-dev]

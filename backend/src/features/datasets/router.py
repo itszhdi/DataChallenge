@@ -18,7 +18,7 @@ async def list_datasets() -> list[dict]:
 
 @router.post("/import")
 async def import_from_api(body: ImportRequest) -> ImportResult:
-    return await service.fetch_and_import(body.group_id)
+    return await service.fetch_and_import(body.group_id, body.url)
 
 
 @router.post("/upload")
