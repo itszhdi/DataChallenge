@@ -22,5 +22,6 @@ export const STORAGE_KEYS = {
   dataset: 'cqa-dataset',
   exportMeta: 'cqa-export-meta',
   jobId: 'cqa-job-id',
+  jobAcknowledged: 'cqa-job-acknowledged',
   sidebar: 'cqa-sidebar-open',
 }

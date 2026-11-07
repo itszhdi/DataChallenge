@@ -3,12 +3,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LuPlus, LuRotateCcw, LuSave, LuScale, LuTriangleAlert } from 'react-icons/lu'
 import { toast } from 'sonner'
-import { useBatchJob } from '../../../hooks/useBatchJob'
 import { useChecklistDraft } from '../../../hooks/useChecklistDraft'
 import { useDataset } from '../../../hooks/useDataset'
 import { useFormat } from '../../../hooks/useFormat'
+import { useJob } from '../../../hooks/useJob'
 import { validateChecklist, weightTotal } from '../../../lib/checklist'
-import JobProgress from '../../dialogs/JobProgress'
 import Badge from '../../ui/Badge'
 import Button from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -23,7 +22,7 @@ export default function ChecklistTab() {
   const { t } = useTranslation()
   const format = useFormat()
   const { dataset } = useDataset()
-  const { job, isRunning, start, dismiss } = useBatchJob()
+  const { isRunning, start } = useJob()
   const [openIds, setOpenIds] = useState([])
   const [errors, setErrors] = useState({})
   const [saved, setSaved] = useState(null)
@@ -97,12 +96,11 @@ export default function ChecklistTab() {
           version={saved.checklist.version}
           isRunning={isRunning}
           onApply={() => {
-            start({ dataset, mode: 'reapply', onlyMissing: false })
+            start({ dataset, mode: 'reapply' })
             setSaved(null)
           }}
         />
       )}
-      {job && <JobProgress job={job} onDismiss={dismiss} />}
 
       <Card>
         <Accordion.Root type="multiple" value={openIds} onValueChange={setOpenIds}>

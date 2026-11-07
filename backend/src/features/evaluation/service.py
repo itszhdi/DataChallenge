@@ -14,6 +14,7 @@ from src.features.evaluation.exceptions import (
     ChannelExcluded,
     ConversationNotFound,
     EvaluationNotFound,
+    JobAlreadyRunning,
     LLMUnavailable,
     NoActiveChecklist,
 )
@@ -105,7 +106,7 @@ async def run_llm(
         raw, meta = await llm.complete_json(messages, build_schema(criteria))
     except LLMError as e:
         logger.error("Evaluation failed for %s: %s", conversation["id"], e)
-        raise LLMUnavailable(str(e)) from e
+        raise LLMUnavailable(str(e), e.code) from e
     raw = ground_answers(raw, conversation["transcript"])
     answers, warnings = validate_answers(criteria, raw, len(conversation["transcript"]))
     if warnings:
@@ -187,7 +188,7 @@ def list_conversations_with_scores(dataset: str | None = None) -> list[dict[str,
 
 
 class NothingToReapply(Exception):
-    pass
+    code = "no_evaluation"
 
 
 async def reapply(llm: LLMClient, evaluation_id: int) -> dict[str, Any]:
@@ -251,28 +252,44 @@ async def reapply_many(llm: LLMClient, dataset: str | None) -> dict[str, Any]:
     return {"total": len(latest), "done": done, "failed": failed}
 
 
+# ** Эти сбои не зависят от диалога, поэтому пакет сразу останавливается
+STOP_BATCH_CODES = {"llm_unavailable", "llm_auth", "llm_model_not_found"}
+
+
 async def run_batch(llm: LLMClient, job: dict[str, Any], conversation_ids: list[str], mode: str = "evaluate") -> None:
     # ** Воркеры берут id по порядку, поэтому очередь идёт в выбранной сортировке; число воркеров = лимит LLM-клиента
     action = evaluate_conversation if mode == "evaluate" else reapply_conversation
+    fatal: dict[str, Any] | None = None
 
     async def one(cid: str) -> None:
+        nonlocal fatal
+        job["current"].append(cid)
         try:
             evaluation_id = await action(llm, cid)
             job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
         except (ChannelExcluded, NothingToReapply) as e:
-            job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e)})
+            job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e), "code": e.code})
         except HTTPException as e:
-            job["failed"].append({"conversation_id": cid, "reason": e.detail})
+            failure = {"conversation_id": cid, "reason": e.detail, "code": getattr(e, "code", "internal")}
+            job["failed"].append(failure)
+            if failure["code"] in STOP_BATCH_CODES:
+                fatal = failure
         except Exception as e:
             logger.exception("Batch job %s: conversation %s crashed", job["id"], cid)
-            job["failed"].append({"conversation_id": cid, "reason": f"{type(e).__name__}: {e}"})
+            job["failed"].append({"conversation_id": cid, "reason": f"{type(e).__name__}: {e}", "code": "internal"})
         finally:
+            job["current"].remove(cid)
             job["processed"] += 1
 
     pending = iter(conversation_ids)
 
     async def worker() -> None:
         for cid in pending:
+            if fatal:
+                # ** Модель недоступна для всех: остальным диалогам незачем ждать повторы
+                job["failed"].append({**fatal, "conversation_id": cid})
+                job["processed"] += 1
+                continue
             await one(cid)
 
     logger.info("Batch job %s (%s) started: %d conversations", job["id"], mode, len(conversation_ids))
@@ -308,7 +325,9 @@ def resolve_batch_ids(conversation_ids: list[str] | None, dataset: str | None, o
 async def start_batch(
     llm: LLMClient, dataset: str | None, mode: str = "evaluate", only_missing: bool = False, conversation_ids: list[str] | None = None
 ) -> dict[str, Any]:
+    if jobs.current_job():
+        raise JobAlreadyRunning()
     ids = await asyncio.to_thread(resolve_batch_ids, conversation_ids, dataset, only_missing)
-    job = jobs.create_job(mode, len(ids))
+    job = jobs.create_job(mode, ids)
     jobs.spawn(run_batch(llm, job, ids, mode))
     return job

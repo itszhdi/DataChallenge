@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, File, Query, UploadFile
 
@@ -8,9 +9,11 @@ from src.dependencies import LLMDep
 from src.features.datasets import service
 from src.features.datasets.exceptions import InvalidDatasetPayload
 from src.features.datasets.schemas import ImportRequest, ImportResult, SourceCheck
+from src.features.evaluation.exceptions import JobAlreadyRunning
 from src.features.evaluation.service import start_batch
 from src.features.settings.service import load_app_settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
@@ -18,8 +21,11 @@ async def with_auto_evaluation(result: ImportResult, llm: LLMDep) -> ImportResul
     # * Автооценка после импорта: очередь строится по текущим настройкам
     app = await asyncio.to_thread(load_app_settings)
     if app.auto_evaluate_on_import and result.imported:
-        job = await start_batch(llm, result.dataset, only_missing=app.only_missing)
-        result.job_id = job["id"]
+        try:
+            job = await start_batch(llm, result.dataset, only_missing=app.only_missing)
+            result.job_id = job["id"]
+        except JobAlreadyRunning:
+            logger.info("Auto evaluation skipped for %s: another job is running", result.dataset)
     return result
 
 

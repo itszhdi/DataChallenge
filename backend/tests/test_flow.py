@@ -7,7 +7,7 @@ import pytest
 
 from src.config.settings import get_settings
 from src.features.evaluation.service import resolve_batch_ids
-from src.llm.client import LLMClient
+from src.llm.client import LLMClient, LLMError
 from src.main import app
 
 SAMPLE = Path(__file__).parent / "sample_data.json"
@@ -128,3 +128,47 @@ async def test_default_checklist_and_source_check(client, monkeypatch):
     check = (await client.get("/api/datasets/check", params={"group_id": "CTRL"})).json()
     assert check == {"dataset": "CTRL", "total_records": 2}
     assert (await client.get("/api/datasets")).json() == []
+
+
+async def wait_job(client, job_id):
+    for _ in range(100):
+        job = (await client.get(f"/api/jobs/{job_id}")).json()
+        if job["status"] == "finished":
+            return job
+        await asyncio.sleep(0.01)
+    raise AssertionError("job did not finish")
+
+
+async def test_batch_stops_when_model_is_unavailable(client, monkeypatch):
+    calls = []
+
+    async def down(self, messages, schema):
+        calls.append(1)
+        raise LLMError("connection refused", "llm_unavailable")
+
+    monkeypatch.setattr(LLMClient, "complete_json", down)
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+    started = (await client.post("/api/evaluate/batch", json={"dataset": None})).json()
+    job = await wait_job(client, started["id"])
+    assert len(calls) == 1 and {f["code"] for f in job["failed"]} == {"llm_unavailable"}
+    assert job["processed"] == job["total"] == 3 and job["current"] == []
+
+
+async def test_only_one_job_at_a_time(client, monkeypatch):
+    release = asyncio.Event()
+
+    async def slow(self, messages, schema):
+        await release.wait()
+        raise LLMError("too many requests", "llm_rate_limited")
+
+    monkeypatch.setattr(LLMClient, "complete_json", slow)
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+    payload = {"conversation_ids": ["s-ru-001"]}
+    started = (await client.post("/api/evaluate/batch", json=payload)).json()
+    assert started["conversation_ids"] == ["s-ru-001"]
+    assert (await client.post("/api/evaluate/batch", json=payload)).status_code == 409
+    await asyncio.sleep(0.01)
+    assert (await client.get(f"/api/jobs/{started['id']}")).json()["current"] == ["s-ru-001"]
+    release.set()
+    job = await wait_job(client, started["id"])
+    assert job["failed"][0]["code"] == "llm_rate_limited"

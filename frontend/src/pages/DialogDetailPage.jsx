@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LuArrowLeft, LuListChecks, LuPlay } from 'react-icons/lu'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
 import { audioUrl } from '../api/conversations'
 import AppealModal from '../components/detail/AppealModal'
 import AudioPlayer from '../components/detail/AudioPlayer'
@@ -16,9 +15,10 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { Select } from '../components/ui/Field'
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/States'
 import { useEvaluationAppeals } from '../hooks/useAppeals'
-import { useConversations, useEvaluateConversation } from '../hooks/useConversations'
-import { useDialogDetail, useReapplyEvaluation } from '../hooks/useDialogDetail'
+import { useConversations } from '../hooks/useConversations'
+import { useDialogDetail } from '../hooks/useDialogDetail'
 import { useFormat } from '../hooks/useFormat'
+import { useJob } from '../hooks/useJob'
 import { AUDIO_LEAD_SEC } from '../lib/constants'
 
 export default function DialogDetailPage() {
@@ -47,13 +47,13 @@ export default function DialogDetailPage() {
     (nextId) => setSearchParams(nextId ? { evaluation: String(nextId) } : {}, { replace: true }),
     [setSearchParams],
   )
-  const evaluate = useEvaluateConversation({ onEvaluated: (result) => selectEvaluation(result.evaluation.id) })
-  const reapply = useReapplyEvaluation({
-    onApplied: (result) => {
-      selectEvaluation(result.evaluation.id)
-      toast.success(t(result.reapply.llm_called ? 'detail.reappliedWithModel' : 'detail.reappliedWithoutModel'))
-    },
-  })
+  const { job, isRunning, start } = useJob()
+  const isAnalyzing = job?.status === 'running' && job.conversation_ids.includes(id)
+  // Снимаем закреплённую оценку: после завершения страница покажет новый результат
+  const runJob = (mode) => {
+    selectEvaluation(null)
+    start({ mode, conversationIds: [id] })
+  }
 
   const goToTurn = useCallback(
     (turn) => {
@@ -80,7 +80,6 @@ export default function DialogDetailPage() {
   const conv = conversation.data
   const result = card.data
   const isStale = result && activeChecklist && result.checklist.id !== activeChecklist.id
-  const isBusy = evaluate.isPending || reapply.isPending
   const originalById = new Map(result?.original.criteria.map((item) => [item.id, item]))
 
   return (
@@ -113,11 +112,11 @@ export default function DialogDetailPage() {
           ) : (
             <>
               {isStale && (
-                <Button icon={LuListChecks} loading={reapply.isPending} disabled={isBusy} onClick={() => reapply.mutate(evaluationId)}>
+                <Button icon={LuListChecks} disabled={isRunning} onClick={() => runJob('reapply')}>
                   {t('detail.applyChecklist', { version: activeChecklist.version })}
                 </Button>
               )}
-              <Button variant="primary" icon={LuPlay} loading={evaluate.isPending} disabled={isBusy} onClick={() => evaluate.mutate(id)}>
+              <Button variant="primary" icon={LuPlay} loading={isAnalyzing} disabled={isRunning} onClick={() => runJob('evaluate')}>
                 {t(result ? 'detail.evaluateAgain' : 'detail.evaluate')}
               </Button>
             </>

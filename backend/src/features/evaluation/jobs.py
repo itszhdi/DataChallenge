@@ -8,9 +8,10 @@ _jobs: dict[str, dict[str, Any]] = {}
 _tasks: set[asyncio.Task] = set()
 
 
-def create_job(kind: str, total: int) -> dict[str, Any]:
+def create_job(kind: str, conversation_ids: list[str]) -> dict[str, Any]:
     job = {
-        "id": uuid.uuid4().hex[:12], "kind": kind, "status": "running", "total": total, "processed": 0,
+        "id": uuid.uuid4().hex[:12], "kind": kind, "status": "running", "total": len(conversation_ids), "processed": 0,
+        "conversation_ids": conversation_ids, "current": [],
         "done": [], "failed": [], "skipped": [], "created_at": datetime.now(UTC).isoformat(timespec="seconds"), "finished_at": None,
     }
     _jobs[job["id"]] = job
@@ -19,6 +20,10 @@ def create_job(kind: str, total: int) -> dict[str, Any]:
 
 def get_job(job_id: str) -> dict[str, Any] | None:
     return _jobs.get(job_id)
+
+
+def current_job() -> dict[str, Any] | None:
+    return next((job for job in _jobs.values() if job["status"] == "running"), None)
 
 
 def finish(job: dict[str, Any]) -> None:

@@ -48,7 +48,8 @@
     "notEvaluated": "Not evaluated",
     "gross": "Critical violation",
     "preliminary": "Preliminary",
-    "evaluated": "Evaluated"
+    "evaluated": "Evaluated",
+    "queued": "In queue"
   },
   "gross": {
     "insult": "Insulting the client",
@@ -83,7 +84,6 @@
     "export": "Export JSON",
     "evaluate": "Evaluate",
     "reevaluate": "Re-evaluate",
-    "evaluated": "Evaluation ready. Score: {{total}}",
     "empty": "Import a dataset with the Import button.",
     "nothingFound": "No dialogs match these filters",
     "allFormats": "All formats",
@@ -119,12 +119,36 @@
   "job": {
     "evaluate": "Evaluating dialogs",
     "reapply": "Applying checklist",
-    "running": "running…",
-    "finishedShort": "finished",
-    "progress": "processed {{processed}} of {{total}} · done {{done}} · skipped {{skipped}} · errors {{failed}}",
-    "failed": "Errors",
-    "skipped": "Skipped",
-    "finished": "Done: {{done}}, skipped: {{skipped}}, errors: {{failed}}"
+    "counter": "{{processed}} of {{total}}",
+    "failedCount": "errors: {{count}}",
+    "elapsed": "{{time}} elapsed",
+    "remaining": "about {{time}} left",
+    "current": "Now: {{ids}}",
+    "waiting": "Starting…",
+    "result": {
+      "success": {
+        "title": "Everything went well",
+        "text": "Dialogs evaluated: {{done}}."
+      },
+      "partial": {
+        "title": "Done, but not everything worked",
+        "text": "Evaluated: {{done}}. Failed: {{failed}}."
+      },
+      "failed": {
+        "title": "Sorry, something went wrong",
+        "text": "The evaluation did not work. Earlier results are unchanged."
+      },
+      "empty": {
+        "title": "Nothing to evaluate",
+        "text": "No suitable dialogs: everything is already evaluated or skipped."
+      },
+      "notStarted": "The evaluation did not start.",
+      "skipped": "Skipped: {{count}}",
+      "details": "Details for a specialist",
+      "view": "View result",
+      "retry": "Try again",
+      "retryFailed": "Retry failed ones"
+    }
   },
   "detail": {
     "back": "Back to dialogs",
@@ -134,8 +158,6 @@
     "applyChecklist": "Apply checklist v{{version}}",
     "evaluate": "Run evaluation",
     "evaluateAgain": "Evaluate again",
-    "reappliedWithModel": "Checklist applied, the model evaluated the changed criteria",
-    "reappliedWithoutModel": "Recalculated without calling the model",
     "transcript": "Transcript",
     "turnCount_one": "{{count}} message",
     "turnCount_other": "{{count}} messages",
@@ -335,6 +357,68 @@
       "check": "Test API connection",
       "ok": "Connection works: dataset {{dataset}}, records: {{count}}",
       "empty": "Connection works, but dataset {{dataset}} has no records"
+    }
+  },
+  "jobError": {
+    "llm_unavailable": {
+      "title": "The model is not running",
+      "action": "Open LM Studio, start the server, load the model and press “Try again”."
+    },
+    "llm_timeout": {
+      "title": "The model took too long",
+      "action": "Wait a little and try again. If it keeps happening, raise LLM_TIMEOUT_SEC on the server."
+    },
+    "llm_rate_limited": {
+      "title": "Too many requests to the model",
+      "action": "Wait a couple of minutes and try again. A longer delay in Settings helps."
+    },
+    "llm_bad_answer": {
+      "title": "The model gave an unreadable answer",
+      "action": "Press “Try again”: it usually works the second time."
+    },
+    "llm_auth": {
+      "title": "No access to the model",
+      "action": "Check the LLM_API_KEY on the server."
+    },
+    "llm_model_not_found": {
+      "title": "Model not found",
+      "action": "Load the model in LM Studio and check its name in LLM_MODEL."
+    },
+    "llm_rejected": {
+      "title": "The model refused the request",
+      "action": "Try again. If it repeats, show the details to a specialist."
+    },
+    "llm_server_error": {
+      "title": "The model service failed",
+      "action": "Wait a minute and try again."
+    },
+    "internal": {
+      "title": "Something went wrong",
+      "action": "Try again. If it repeats, show the details to a specialist."
+    },
+    "backend_down": {
+      "title": "No connection to the server",
+      "action": "Check that the server is running and try again."
+    },
+    "job_running": {
+      "title": "An evaluation is already running",
+      "action": "Wait until it ends: progress is shown at the top of the page."
+    },
+    "conversation_not_found": {
+      "title": "Dialog not found",
+      "action": "Refresh the page and import the dataset again."
+    },
+    "no_checklist": {
+      "title": "No active checklist",
+      "action": "Save a checklist in Settings."
+    },
+    "channel_excluded": {
+      "title": "Calls are not sent to the model",
+      "action": "This is the EXCLUDE_CHANNELS setting: real recordings are not sent to a cloud service."
+    },
+    "no_evaluation": {
+      "title": "This dialog has no evaluation yet",
+      "action": "Evaluate the dialog first, then apply the checklist."
     }
   }
 }

@@ -119,6 +119,19 @@
   animation: sidebar-in 0.2s ease-out;
 }
 
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.progress-indeterminate {
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+
 @keyframes turn-flash {
   from {
     background-color: var(--brand-soft);

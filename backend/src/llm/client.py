@@ -18,7 +18,24 @@ RATE_LIMIT_BASE_PAUSE_SEC = 15
 
 
 class LLMError(Exception):
-    pass
+    # * code — машинная причина сбоя: по ней интерфейс показывает понятное сообщение
+    def __init__(self, message: str, code: str = "llm_rejected") -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def network_error_code(error: Exception) -> str:
+    if isinstance(error, openai.APITimeoutError):
+        return "llm_timeout"
+    return "llm_server_error" if isinstance(error, openai.InternalServerError) else "llm_unavailable"
+
+
+def status_error_code(error: openai.APIStatusError) -> str:
+    if error.status_code in (401, 403):
+        return "llm_auth"
+    if error.status_code == 404 or "no models loaded" in str(error).lower():
+        return "llm_model_not_found"
+    return "llm_rejected"
 
 
 def gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -113,11 +130,11 @@ class LLMClient:
 
     async def complete_json(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         if self.provider == "gemini" and not self.settings.llm_api_key:
-            raise LLMError("LLM_API_KEY не задан в .env")
+            raise LLMError("LLM_API_KEY не задан в .env", "llm_auth")
 
         kwargs = self._request_kwargs(messages, schema)
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        attempts, rate_limited, last_error = 0, 0, ""
+        attempts, rate_limited, last_error, last_code = 0, 0, "", "llm_bad_answer"
         started = time.monotonic()
 
         async with self._semaphore:
@@ -131,20 +148,21 @@ class LLMClient:
                     rate_limited += 1
                     attempts -= 1
                     if rate_limited > RATE_LIMIT_ATTEMPTS:
-                        last_error = f"rate limit: {e}"
+                        # ! Текст SDK не содержит причину лимита, она лежит в теле ответа
+                        last_error, last_code = f"rate limit: {e.body or e}", "llm_rate_limited"
                         break
                     pause = RATE_LIMIT_BASE_PAUSE_SEC * rate_limited
                     logger.warning("LLM rate limited (429), retry %d/%d in %ds", rate_limited, RATE_LIMIT_ATTEMPTS, pause)
                     await asyncio.sleep(pause)
                     continue
                 except (openai.APIConnectionError, openai.APITimeoutError, openai.InternalServerError) as e:
-                    last_error = f"{type(e).__name__}: {e}"
+                    last_error, last_code = f"{type(e).__name__}: {e}", network_error_code(e)
                     logger.warning("LLM network/server error on attempt %d: %s", attempts, last_error)
                     continue
                 except openai.APIStatusError as e:
                     # ! 400/401/403 повторять бессмысленно
                     logger.error("LLM request rejected: status=%s body=%s", e.status_code, str(e)[:500])
-                    raise LLMError(f"LLM отклонил запрос ({e.status_code}): {str(e)[:300]}") from e
+                    raise LLMError(f"LLM отклонил запрос ({e.status_code}): {str(e)[:300]}", status_error_code(e)) from e
 
                 if resp.usage:
                     usage["prompt_tokens"] += resp.usage.prompt_tokens or 0
@@ -155,7 +173,7 @@ class LLMClient:
                 try:
                     data = extract_json(content or "")
                 except ValueError as e:
-                    last_error = f"bad JSON: {e}"
+                    last_error, last_code = f"bad JSON: {e}", "llm_bad_answer"
                     logger.warning("LLM returned invalid JSON on attempt %d: %s; head=%r", attempts, e, (content or "")[:200])
                     continue
 
@@ -175,4 +193,4 @@ class LLMClient:
                 return data, meta
 
         logger.error("LLM call failed after %d attempts: %s", attempts, last_error)
-        raise LLMError(f"Модель не ответила корректно: {last_error}")
+        raise LLMError(f"Модель не ответила корректно: {last_error}", last_code)

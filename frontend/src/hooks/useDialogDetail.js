@@ -1,8 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { fetchActiveChecklist, fetchChecklist } from '../api/checklists'
 import { fetchConversation } from '../api/conversations'
-import { fetchEvaluation, reapplyEvaluation } from '../api/evaluations'
-import { useApiError } from './useApiError'
+import { fetchEvaluation } from '../api/evaluations'
 
 export function useDialogDetail(id, requestedEvaluationId) {
   const conversation = useQuery({ queryKey: ['conversation', id], queryFn: () => fetchConversation(id) })
@@ -28,17 +27,4 @@ export function useDialogDetail(id, requestedEvaluationId) {
     isLoading: conversation.isLoading || (Boolean(evaluationId) && card.isLoading),
     error: conversation.error ?? card.error,
   }
-}
-
-export function useReapplyEvaluation({ onApplied } = {}) {
-  const queryClient = useQueryClient()
-  const { notify } = useApiError()
-  return useMutation({
-    mutationFn: reapplyEvaluation,
-    onSuccess: (card) => {
-      queryClient.invalidateQueries()
-      onApplied?.(card)
-    },
-    onError: notify,
-  })
 }
