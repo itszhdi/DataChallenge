@@ -1,4 +1,9 @@
-export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+// адрес API: ?api=… в ссылке → window.CQA_CONFIG.apiUrl (веб-ресурс Dynamics) → VITE_API_URL → локальный бэкенд
+export const API_URL =
+  new URLSearchParams(window.location.search).get('api') ||
+  window.CQA_CONFIG?.apiUrl ||
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:8000/api'
 
 export const CHANNEL = { CHAT: 'agent chat', CALL: 'voice call' }
 export const LANGUAGES = ['RU', 'KZ', 'EN']
