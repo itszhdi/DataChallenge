@@ -1,13 +1,11 @@
 import { buildUrl, request } from './client'
 
-const exportParams = ({ dataset, teamName, modelMode, modelName }) => ({
-  dataset,
-  team_name: teamName,
-  model_mode: modelMode,
-  model_name: modelName,
-})
+// Файл для сдачи организаторам (формат JSON 1.0): target dev | prod, без target бэкенд выбирает папку по набору
+const submissionParams = ({ dataset, target }) => ({ dataset, target })
 
-// Файл отдаёт бэкенд с Content-Disposition: браузер скачивает его сам
-export const exportDownloadUrl = (options) => buildUrl('/export', { ...exportParams(options), download: true })
+export const previewSubmission = (options) => request('/export/submission', { params: submissionParams(options) })
 
-export const saveExport = (options) => request('/export/save', { method: 'POST', params: exportParams(options) })
+// Файл отдаёт бэкенд с Content-Disposition: браузер скачивает results.json сам
+export const submissionDownloadUrl = (options) => buildUrl('/export/submission', { ...submissionParams(options), download: true })
+
+export const saveSubmission = (options) => request('/export/submission/save', { method: 'POST', params: submissionParams(options) })

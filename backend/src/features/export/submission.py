@@ -1,6 +1,7 @@
 # * Выгрузка для сдачи организаторам: строго формат JSON 1.0 из приложения к гайду (results/<dev|prod>/results.json)
 import json
 import logging
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Literal
 
@@ -38,9 +39,17 @@ ALLOWED_VALUES: dict[str, tuple[Any, ...]] = {
     "critical": BOOL,
 }
 SCALE_CODES = {"consultation", "dialogue"}
+# ** Веса и максимумы шкал из таблицы организаторов: итог для сдачи не зависит от правок нашего чек-листа
+OFFICIAL_WEIGHTS = {"contact": 10, "discovery": 15, "identification": 20, "consultation": 20, "empathy": 15, "dialogue": 15, "closure": 5}
+SCALE_MAX = {"consultation": 20, "dialogue": 10}
 MODE_BY_PROVIDER = {"gemini": "external_api", "openai": "local"}
 # ** Luna тоже ходит через openai-совместимый клиент, поэтому облако от локальной модели отличаем по профилю
 MODE_BY_PROFILE = {"gemini": "external_api", "luna": "external_api", "local": "local"}
+
+
+def default_target(dataset: str) -> Target:
+    # * Папка по набору: DEV → results/dev, любой другой (контрольный набор организаторов) → results/prod
+    return "dev" if dataset.strip().upper() == "DEV" else "prod"
 
 
 def _mode(meta: dict[str, Any]) -> str:
@@ -64,6 +73,21 @@ def _value(item: dict[str, Any]) -> Any:
     if item["type"] == "scale":
         return item["value"]
     return item["value"] == 1
+
+
+def official_score(criteria: list[dict[str, Any]]) -> float:
+    # * N/A (null) исключается, его вес пропорционально делится между остальными; critical итог не обнуляет
+    earned, total = Decimal(0), Decimal(0)
+    for c in criteria:
+        weight = OFFICIAL_WEIGHTS.get(c["criterion_id"])
+        if weight is None or c["value"] is None:
+            continue
+        share = Decimal(c["value"]) / SCALE_MAX[c["criterion_id"]] if c["criterion_id"] in SCALE_CODES else Decimal(int(c["value"]))
+        earned += share * weight
+        total += weight
+    if not total:
+        return 0.0
+    return float((earned / total * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _criteria(score: dict[str, Any]) -> list[dict[str, Any]] | None:
@@ -121,11 +145,11 @@ def build_submission(dataset: str, team_name: str, fallback_model: str) -> dict[
             "conversation_id": conv["source_id"],
             "status": "ok",
             "criteria": criteria,
-            "score": {"final_score": s["score"]["total"], "critical_flag": critical},
+            "score": {"final_score": official_score(criteria), "critical_flag": critical},
         })
     return {
         "schema_version": SCHEMA_VERSION,
-        "team_name": team_name,
+        "team_name": team_name.strip() or get_settings().team_name,
         "model": _model(used, fallback_model),
         "results": results,
     }
@@ -153,6 +177,8 @@ def validate_submission(submission: dict[str, Any], dataset: str, target: Target
         errors.append(f"conversation_id не совпадают с импортированным набором {dataset}.")
     if not submission["team_name"].strip():
         warnings.append("Не указано название команды (team_name).")
+    if target != default_target(dataset):
+        warnings.append(f"Набор {dataset} сохраняется в папку {target}: проверьте, что папка выбрана верно.")
     if target == "prod" and len(results) != PROD_SIZE:
         warnings.append(f"В prod должно быть ровно {PROD_SIZE} записей, сейчас {len(results)}.")
 
@@ -185,6 +211,8 @@ def validate_submission(submission: dict[str, Any], dataset: str, target: Target
             errors.append(f"{cid}: critical_flag не совпадает с критерием critical.")
         if score["final_score"] is not None and not 0 <= score["final_score"] <= 100:
             errors.append(f"{cid}: final_score вне диапазона 0–100.")
+        elif score["final_score"] != official_score(r["criteria"]):
+            errors.append(f"{cid}: final_score не совпадает с расчётом по весам организаторов.")
 
     counts = {"ok": sum(r["status"] == "ok" for r in results), "error": sum(r["status"] == "error" for r in results)}
     return {"errors": errors, "warnings": warnings, "counts": counts}

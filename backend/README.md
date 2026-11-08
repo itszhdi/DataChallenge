@@ -115,12 +115,18 @@ make models && make use-local
 - Свой транскрипт хранится рядом с оригинальным (`transcript_asr`). В оценке сохраняется снимок использованного транскрипта, чтобы номера `#N` в карточке и апелляциях совпадали с ответом модели.
 - `make transcribe ID=DEV:p4-ru-002` распознаёт запись заново.
 
-## Экспорт
+## Экспорт (файл для сдачи)
 
-В отчёт входят **все** диалоги набора. У каждого есть `status`: `ok` / `partial` (есть оценка), `failed` / `skipped` (с `reason`), `excluded` (канал из `EXCLUDE_CHANNELS`) или `pending` (ещё не оценён). Сводка по статусам — в `counts`.
+Одна выгрузка — строго в формате организаторов JSON 1.0: `results/dev/results.json` для DEV и `results/prod/results.json` для контрольного набора. Папка выбирается по набору (`DEV` → `dev`, остальные → `prod`), её можно задать явно.
 
-- Скачать: `GET /api/export?dataset=DEV&team_name=...&download=true` (браузер сохраняет файл).
-- Сохранить на сервере: `make save-results DATASET=DEV TEAM=...` (`POST /api/export/save`) → `results/DEV_<время>.json` и `results/DEV_latest.json` в корне проекта (`RESULTS_DIR`).
+- В файл входят **все** диалоги набора. Оценённые — `status: "ok"` и 8 критериев с кодами организаторов (`contact` … `critical`). Неоценённые и упавшие — `status: "error"`, `criteria: []`, `score: null` и причина в `error`.
+- `final_score` считается по весам организаторов (10/15/20/20/15/15/5) и не зависит от правок нашего чек-листа. N/A исключается, его вес пропорционально делится между остальными критериями. `critical` итог не обнуляет.
+- `team_name` — `Cyberpsychosis` (`TEAM_NAME` в `.env`, можно передать явно параметром `team_name`).
+- `model.mode` (`local`, `external_api` или `hybrid`) и `model.name` берутся из фактически использованных моделей.
+- Перед записью файл проверяется: коды и значения критериев, повторы ID, номера реплик, `critical_flag`, итог, для prod ровно 10 записей. При ошибках файл не записывается.
+
+Интерфейс: «Диалоги» → «Экспорт» показывает результат проверки, сохраняет файл в `results/<dev|prod>/` или скачивает `results.json`.
+Терминал: `make submit DATASET=DEV` (`TARGET=dev|prod` и `TEAM=` — явно).
 
 ## .env
 
@@ -153,7 +159,7 @@ make models && make use-local
 | `pause`, `resume`, `stop` (`JOB=`) | Пауза, продолжение и остановка пакета |
 | `settings`, `models`, `use-gemini`, `use-luna`, `use-local` | Настройки, проверка моделей, переключение профиля |
 | `transcribe ID=` | Распознать запись звонка заново |
-| `save-results DATASET= TEAM=` | Отчёт в `results/` |
+| `submit DATASET= TEAM= [TARGET=]` | Файл для сдачи в `results/<dev|prod>/results.json` |
 | `analytics` | Сводка |
 | `docker-build`, `docker-up`, `docker-down`, `docker-logs` | Docker |
 
@@ -189,7 +195,8 @@ make models && make use-local
 | GET | `/analytics?dataset=` | Средний итог, разбивка по языкам/каналам/критериям, грубые ошибки, 5 худших |
 | GET | `/analytics/dashboard?dataset=` | Сводка для супервайзера: KPI, критерии, сегменты, распределение итогов и строки диалогов для drill-down |
 | GET | `/prompt/{conversation_id}` | Промпт и JSON-схема без вызова модели (отладка) |
-| GET | `/export?dataset=&team_name=&model_mode=&model_name=&download=` | Отчёт по всем диалогам |
+| GET | `/export/submission?dataset=&target=&team_name=&download=` | Файл для сдачи и результат проверки; `download=true` — сам `results.json` |
+| POST | `/export/submission/save?dataset=&target=&team_name=` | Записать `results/<dev|prod>/results.json` (при ошибках проверки — 422) |
 | POST | `/export/save?...` | Сохранить отчёт в `results/` |
 | GET | `/audio/{conversation_id}` | Прокси записи звонка с поддержкой Range (перемотка) |
 
@@ -200,7 +207,7 @@ make models && make use-local
 2. `make batch DATASET=DEV MODE=reapply`. Модель вызывается только по изменённым критериям, решения апелляций по неизменным сохраняются.
 
 ### Контрольный набор организаторов
-`POST /datasets/import {"group_id":"<новый>"}`, затем `make batch DATASET=<новый>` или авторежим с `auto_dataset`, и в конце `make save-results DATASET=<новый> TEAM=...`.
+`POST /datasets/import {"group_id":"<новый>"}`, затем `make batch DATASET=<новый>` или авторежим с `auto_dataset`, и в конце `make submit DATASET=<новый>` (запишет `results/prod/results.json`).
 
 ### Ручной эталон (golden)
 `make golden` оценивает диалоги из `tests/golden.csv` активным чек-листом и сравнивает ответы модели с эталоном по каждому критерию. Перед запуском импортируйте датасет, содержащий эти ID (`make import-dev` для DEV). Команда печатает точность по критериям, общий процент и объяснения модели для несовпадений; код завершения `1` означает, что найдены расхождения. Разметка с доказательствами и заметками хранится отдельно в `tests/golden_notes.csv`.

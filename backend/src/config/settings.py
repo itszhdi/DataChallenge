@@ -38,7 +38,9 @@ class Settings(BaseSettings):
     dataset_api_url: str = ""
     db_path: Path = BASE_DIR / "cqa.sqlite3"
     default_checklist_path: Path = BASE_DIR / "checklists" / "default_checklist.json"
-    # * Куда сохраняются выгрузки результатов (POST /api/export/save)
+    # * Файлы для сдачи: results/<dev|prod>/results.json (POST /api/export/submission/save)
+    # * Название команды в файле для сдачи, если не передано явно
+    team_name: str = "Cyberpsychosis"
     results_dir: Path = BASE_DIR.parent / "results"
     cors_origins: list[str] = ["*"]
     log_level: str = "INFO"

@@ -30,7 +30,4 @@ export const STORAGE_KEYS = {
   jobId: 'cqa-job-id',
   jobAcknowledged: 'cqa-job-acknowledged',
   sidebar: 'cqa-sidebar-open',
-  exportTeam: 'cqa-export-team',
-  exportMode: 'cqa-export-mode',
-  exportModel: 'cqa-export-model',
 }

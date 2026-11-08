@@ -8,6 +8,7 @@ import pytest
 
 from src.config.settings import get_settings
 from src.features.evaluation.service import resolve_batch_ids
+from src.features.export.submission import official_score
 from src.llm.client import LLMClient, LLMError
 from src.llm.prompts import PROMPT_VERSION
 from src.main import app
@@ -99,10 +100,12 @@ async def test_full_flow(client):
 
     analytics = (await client.get("/api/analytics")).json()
     assert analytics["evaluated"] == 1 and analytics["worst"][0]["total"] == r["final_total"]
-    exported = (await client.get("/api/export", params={"dataset": "SAMPLE", "team_name": "test"})).json()
-    assert exported["schema_version"] == "1.1"
-    assert exported["results"][0]["prompt_version"] == PROMPT_VERSION
-    assert set(exported["results"][0]["criteria_prompt_versions"].values()) == {PROMPT_VERSION}
+    # * В файл для сдачи идут ответы с учётом апелляции, итог — по весам организаторов, а не нашего чек-листа
+    exported = (await client.get("/api/export/submission", params={"dataset": "SAMPLE", "team_name": "test"})).json()
+    ok = next(x for x in exported["submission"]["results"] if x["status"] == "ok")
+    consultation = next(c for c in ok["criteria"] if c["criterion_id"] == "consultation")
+    assert exported["submission"]["schema_version"] == "1.0" and consultation["value"] == 10
+    assert ok["score"]["final_score"] == official_score(ok["criteria"]) and exported["check"]["errors"] == []
     assert eid != new_eid
     # * Дашборд: апелляция считается один раз, диалог попадает в drill-down
     board = (await client.get("/api/analytics/dashboard")).json()
@@ -141,18 +144,14 @@ async def test_messy_import_and_id_collision(client):
         assert (await client.post("/api/evaluate", json={"conversation_id": cid})).status_code == 422
     assert (await client.post("/api/evaluate", json={"conversation_id": "OTHER:s-ru-001"})).status_code == 200
     assert client.llm_calls
-    export = (await client.get("/api/export", params={"dataset": "OTHER"})).json()
-    assert {r["conversation_id"]: r["status"] for r in export["results"]} == {"s-ru-001": "ok", "empty-1": "skipped", "no-op": "skipped"}
-    assert export["counts"] == {"ok": 1, "skipped": 2}
-
-    # * Экспорт всех статусов в файл: звонок исключён, неоценённый KZ — pending
-    r = await client.get("/api/export", params={"dataset": "SAMPLE", "download": True})
-    assert r.headers["content-disposition"].startswith('attachment; filename="SAMPLE_') and len(r.json()["results"]) == 3
-    saved = (await client.post("/api/export/save", params={"dataset": "../x", "team_name": "t"})).json()
-    assert Path(saved["path"]).parent == get_settings().results_dir and saved["file"].startswith("x_")
-    saved = (await client.post("/api/export/save", params={"dataset": "SAMPLE", "team_name": "t"})).json()
-    data = json.loads(Path(saved["latest"]).read_text(encoding="utf-8"))
-    assert {r["conversation_id"]: r["status"] for r in data["results"]} == {"s-ru-001": "pending", "s-kz-002": "pending", "s-en-003": "excluded"}
+    # ** Неоцениваемые диалоги в файле для сдачи — status=error с причиной, без нулевой оценки
+    body = (await client.get("/api/export/submission", params={"dataset": "OTHER"})).json()
+    assert body["target"] == "prod"
+    statuses = {x["conversation_id"]: x["status"] for x in body["submission"]["results"]}
+    assert statuses == {"s-ru-001": "ok", "empty-1": "error", "no-op": "error"}
+    errors = [x for x in body["submission"]["results"] if x["status"] == "error"]
+    assert all(x["criteria"] == [] and x["score"] is None and x["error"] for x in errors)
+    assert body["check"]["counts"] == {"ok": 1, "error": 2}
 
 
 async def test_appeals_survive_reevaluation_and_threshold_change(client):
@@ -402,18 +401,32 @@ async def test_submission_format(client, tmp_path, monkeypatch):
     body = (await client.get("/api/export/submission", params={"dataset": "SAMPLE", "target": "dev"})).json()
     sub, check = body["submission"], body["check"]
     assert sub["schema_version"] == "1.0" and set(sub) == {"schema_version", "team_name", "model", "results"}
+    assert sub["team_name"] == "Cyberpsychosis"
     assert check["errors"] == [] and check["counts"] == {"ok": 1, "error": 2}
     ok = next(r for r in sub["results"] if r["status"] == "ok")
     assert ok["conversation_id"] == "s-ru-001" and set(ok) == {"conversation_id", "status", "criteria", "score"}
     assert [c["criterion_id"] for c in ok["criteria"]] == [
         "contact", "discovery", "identification", "consultation", "empathy", "dialogue", "closure", "critical"]
     assert ok["score"]["critical_flag"] is ok["criteria"][-1]["value"]
+    # ** Итог для сдачи — по весам организаторов: правка весов в нашем чек-листе его не меняет
+    before = ok["score"]["final_score"]
+    await client.patch("/api/checklists/active/weights", json={"weights": {"c01_contact": 40}})
+    again = (await client.get("/api/export/submission", params={"dataset": "SAMPLE", "target": "dev"})).json()
+    assert next(r for r in again["submission"]["results"] if r["status"] == "ok")["score"]["final_score"] == before
+    assert again["check"]["errors"] == []
     error = next(r for r in sub["results"] if r["status"] == "error")
     assert error["criteria"] == [] and error["score"] is None and error["error"]
 
     saved = (await client.post("/api/export/submission/save", params={"dataset": "SAMPLE", "target": "dev", "team_name": "T"})).json()
     path = tmp_path / "results" / "dev" / "results.json"
     assert saved["path"] == str(path) and json.loads(path.read_text(encoding="utf-8"))["team_name"] == "T"
+    assert any("папку dev" in w for w in saved["warnings"])
+
+    # * Скачивание отдаёт тот же results.json; без target набор не DEV уходит в prod
+    r = await client.get("/api/export/submission", params={"dataset": "SAMPLE", "team_name": "T", "download": True})
+    assert r.headers["content-disposition"] == 'attachment; filename="results.json"' and r.json() == json.loads(path.read_text("utf-8"))
+    assert (await client.get("/api/export/submission", params={"dataset": "SAMPLE"})).json()["target"] == "prod"
+    assert (await client.get("/api/export/submission", params={"dataset": "dev"})).json()["target"] == "dev"
     assert (await client.post("/api/export/submission/save", params={"dataset": "SAMPLE", "target": "../x"})).status_code == 422
 
 

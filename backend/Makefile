@@ -1,4 +1,4 @@
-.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-luna use-local auto-on auto-off worker save-results transcribe analytics golden stats clean-db docker-build docker-up docker-down docker-logs pause resume stop stop-auto
+.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-luna use-local auto-on auto-off worker transcribe analytics golden stats clean-db docker-build docker-up docker-down docker-logs pause resume stop stop-auto
 
 PORT ?= 8000
 
@@ -23,9 +23,9 @@ eval:
 batch:
 	@curl -s -X POST localhost:$(PORT)/api/evaluate/batch -H 'Content-Type: application/json' -d '{"dataset":"$(or $(DATASET),DEV)","mode":"$(or $(MODE),evaluate)","only_missing":$(or $(ONLY_MISSING),false)}'
 
-# * Файл для сдачи организаторам: make submit DATASET=DEV TARGET=dev TEAM="Команда"
+# * Файл для сдачи организаторам: make submit DATASET=DEV → results/dev/results.json (TARGET=dev|prod, TEAM= — явно; команда по умолчанию из TEAM_NAME)
 submit:
-	@curl -s -X POST -G localhost:$(PORT)/api/export/submission/save --data-urlencode "dataset=$(or $(DATASET),DEV)" --data-urlencode "target=$(or $(TARGET),dev)" --data-urlencode "team_name=$(TEAM)" | python3 -m json.tool --no-ensure-ascii
+	@curl -s -X POST -G localhost:$(PORT)/api/export/submission/save --data-urlencode "dataset=$(or $(DATASET),DEV)" $(if $(TARGET),--data-urlencode "target=$(TARGET)") $(if $(TEAM),--data-urlencode "team_name=$(TEAM)") | python3 -m json.tool --no-ensure-ascii
 
 job:
 	@curl -s localhost:$(PORT)/api/jobs/$(JOB)
@@ -90,9 +90,6 @@ auto-off:
 worker:
 	@curl -s localhost:$(PORT)/api/worker
 
-# * Сохраняет результаты набора в results/<DATASET>_<время>.json и <DATASET>_latest.json
-save-results:
-	@curl -s -X POST "localhost:$(PORT)/api/export/save?dataset=$(or $(DATASET),DEV)&team_name=$(TEAM)"
 
 # * Заново распознать запись звонка: make transcribe ID=DEV:p4-ru-002
 transcribe:
