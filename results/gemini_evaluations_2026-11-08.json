@@ -1,0 +1,2731 @@
+{
+  "exported_at": "2026-11-08T03:04:12.531321+00:00",
+  "source": "backend/cqa.sqlite3",
+  "filter": {
+    "provider": "gemini"
+  },
+  "evaluation_count": 16,
+  "results": [
+    {
+      "evaluation_id": 1,
+      "conversation_id": "p1-en-013",
+      "evaluated_at": "2026-11-07T16:46:08+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-013",
+        "sequence": 13,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"I'm trying to figure out how to find bonds in the app.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:11\", \"speaker\": \"bot\", \"text\": \"Use Quotes to search by the name or ticker.\"}, {\"timestamp\": \"00:49\", \"speaker\": \"client\", \"text\": \"Can I speak to an agent? I haven't used this section before.\"}, {\"timestamp\": \"00:53\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"01:14\", \"speaker\": \"client\", \"text\": \"yes please\"}, {\"timestamp\": \"01:15\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"01:17\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"03:30\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Adrian. Open Quotes and search by the bond's name or ticker.\"}, {\"timestamp\": \"03:55\", \"speaker\": \"client\", \"text\": \"Okay, I see the search bar now.\"}, {\"timestamp\": \"04:36\", \"speaker\": \"operator\", \"text\": \"Send me your personal number and I'll call you after work. I charge for private advice and can tell you which bonds to buy.\"}, {\"timestamp\": \"05:03\", \"speaker\": \"client\", \"text\": \"No, I'm only asking for help with the app.\"}, {\"timestamp\": \"05:31\", \"speaker\": \"system\", \"text\": \"Agent closed the chat.\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 9.18,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5730,
+          "completion_tokens": 1142,
+          "total_tokens": 6872
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 9.18
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента (EN) и представиться в первой реплике. Оператор поздоровался (\"Hi\") и назвал своё имя (\"I'm Adrian\") в первой реплике #10. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Hi, I'm Adrian.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось проверить, хватало ли информации для ответа. Клиент в #1 сразу написал, что пытается найти облигации в приложении. Данных для ответа на технический вопрос о поиске хватало, уточнение не требовалось. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "I'm trying to figure out how to find bonds in the app.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось проверить необходимость идентификации. Вопрос клиента касался общей навигации по поиску облигаций в приложении, что не требует проверки персональных данных. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "I'm trying to figure out how to find bonds in the app.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось проконсультировать по поиску облигаций. Оператор корректно объяснил порядок действий в реплике #10 (\"Open Quotes and search by the bond's name or ticker\"), клиент подтвердил получение информации (#11). Вывод: балл 20.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Open Quotes and search by the bond's name or ticker.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось соблюдать вежливость. Клиент не выражал эмоций или жалоб, оператор общался без грубости в рамках вежливости (за исключением флага обхода, проверяемого отдельно). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Hi, I'm Adrian.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 7,
+          "explanation": "Требовалось оценить скорость и управление диалогом. Время первой реакции оператора составило 210 секунд (более 3 минут от первого сообщения клиента #1), оператор не предупредил об ожидании. Вывод: балл 7.",
+          "evidence_ids": [
+            1,
+            10
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Hi, I'm Adrian. Open Quotes and search by the bond's name or ticker.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь и попрощаться. Оператор закрыл чат (#14) после реплики клиента (#13), не предложив помощь и не попрощавшись. Вывод: Нет.",
+          "evidence_ids": [
+            12,
+            13,
+            14
+          ],
+          "checked_range": "#12–#14",
+          "flags": [],
+          "quote": "No, I'm only asking for help with the app.",
+          "quote_ref": 13,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проверить отсутствие грубых нарушений. В реплике #12 оператор предложил клиенту прислать личный номер для платных консультаций в обход компании (\"Send me your personal number... I charge for private advice\"). Вывод: Да.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [
+            "bypass_offer"
+          ],
+          "quote": "Send me your personal number and I'll call you after work. I charge for private advice and can tell you which bonds to buy.",
+          "quote_ref": 12,
+          "quote_verified": true
+        }
+      }
+    },
+    {
+      "evaluation_id": 2,
+      "conversation_id": "p1-en-001",
+      "evaluated_at": "2026-11-07T16:49:48+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-001",
+        "sequence": 1,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"I'm opening a new account and the app says my login is taken.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:08\", \"speaker\": \"bot\", \"text\": \"Did you previously use that login for another account?\"}, {\"timestamp\": \"00:28\", \"speaker\": \"client\", \"text\": \"Yes, I closed that account. Can I talk to a support agent?\"}, {\"timestamp\": \"00:30\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"00:35\", \"speaker\": \"client\", \"text\": \"yes please\"}, {\"timestamp\": \"00:36\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"00:38\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"01:15\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Maya from support. A login stays on record after the account is closed. Use a different login for the new registration.\"}, {\"timestamp\": \"01:28\", \"speaker\": \"client\", \"text\": \"Right, I thought I'd just have to wait. Thanks.\"}, {\"timestamp\": \"02:04\", \"speaker\": \"operator\", \"text\": \"You're welcome. Take care!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 7.11,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5647,
+          "completion_tokens": 1066,
+          "total_tokens": 6713
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 7.11
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться (назвать имя) в первой реплике. Оператор поздоровалась на английском языке и назвала свое имя (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Hi, I'm Maya from support.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Клиент изначально сообщил, что при создании аккаунта логин занят, и что ранее закрыл старый аккаунт (#1, #5). Информации для ответа было достаточно с самого начала. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "I'm opening a new account and the app says my login is taken.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Запрос касался общего правила использования логина при регистрации нового аккаунта и не требовал доступа к персональным данным или операциям по счету. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "I'm opening a new account and the app says my login is taken.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось объяснить причину и дать решение. Оператор корректно пояснила, что логин сохраняется в системе после закрытия аккаунта, и предложила использовать другой логин для регистрации (#10). Вывод: балл 20.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "A login stays on record after the account is closed. Use a different login for the new registration.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявить вежливость и отреагировать на негатив/проблему клиента. Диалог вежливый, клиент не выражал сильного негатива, оператор общалась корректно (#10, #12). Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось поддерживать логику и скорость диалога. Время ответа оператора (#10) составило 75 секунд, задержек и сбоев не было, формулировки четкие. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Hi, I'm Maya from support. A login stays on record after the account is closed. Use a different login for the new registration.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь и попрощаться. Оператор попрощалась (#12), но не уточнила, остались ли у клиента вопросы/нужна ли еще помощь. Вывод: Нет.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Грубых нарушений (оскорбления, увод клиента, утечка данных) в диалоге не обнаружено. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 3,
+      "conversation_id": "p1-ru-001",
+      "evaluated_at": "2026-11-07T16:50:16+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "RU",
+        "source_id": "p1-ru-001",
+        "sequence": 31,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Где посмотреть мой тариф? В приложении не нахожу.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Здравствуйте! Я AIM, AI-ассистент Freedom Broker. Я могу ответить на вопросы о продуктах и услугах, предоставить информацию по вашим счетам, активам и комиссиям, сравнить данные в таблице, отправить контакты вашего менеджера и передать вопрос специалистам поддержки.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Продолжая разговор, Вы соглашаетесь на сбор и обработку персональных данных и подтверждаете, что ознакомились с Политикой конфиденциальности Компании.\"}, {\"timestamp\": \"00:08\", \"speaker\": \"bot\", \"text\": \"Тариф указан на первой странице отчёта брокера.\"}, {\"timestamp\": \"00:28\", \"speaker\": \"client\", \"text\": \"Я сейчас с ноутбука, отчёт качать не хочу. Можно оператора?\"}, {\"timestamp\": \"00:30\", \"speaker\": \"bot\", \"text\": \"Желаете, чтобы я соединил Вас с оператором?\"}, {\"timestamp\": \"00:35\", \"speaker\": \"client\", \"text\": \"да\"}, {\"timestamp\": \"00:36\", \"speaker\": \"bot\", \"text\": \"Пожалуйста, ожидайте. Оператор скоро подключится к чату.\"}, {\"timestamp\": \"00:38\", \"speaker\": \"system\", \"text\": \"Эскалация на оператора.\"}, {\"timestamp\": \"01:15\", \"speaker\": \"operator\", \"text\": \"Здравствуйте! Меня зовут Алина. В веб-версии откройте вкладку «Кабинет». Название тарифа будет под вашим ФИО.\"}, {\"timestamp\": \"01:28\", \"speaker\": \"client\", \"text\": \"Нашла, спасибо.\"}, {\"timestamp\": \"02:04\", \"speaker\": \"operator\", \"text\": \"Пожалуйста. Хорошего вечера!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 7.45,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5666,
+          "completion_tokens": 1034,
+          "total_tokens": 6700
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 7.45
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться в первой реплике. Оператор поздоровалась по-русски и назвала имя Алина (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Здравствуйте! Меня зовут Алина.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Клиент сразу указала, что хочет узнать тариф без скачивания отчета, находясь за ноутбуком (#1, #5). Данных для ответа на вопрос о том, где посмотреть тариф в веб-версии, хватало изначально. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Я сейчас с ноутбука, отчёт качать не хочу.",
+          "quote_ref": 5,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Запрос клиента касался общей инструкции по поиску названия тарифа в интерфейсе веб-версии, что не требует раскрытия персональных данных или конфиденциальных действий со счетом. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5,
+            10
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Где посмотреть мой тариф? В приложении не нахожу.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Клиент спросила, где посмотреть тариф без скачивания отчета с ноутбука. Оператор дала точную и полную инструкцию для веб-версии (#10), вопрос был полностью решен (#11). Вывод: балл 20.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10–#11",
+          "flags": [],
+          "quote": "В веб-версии откройте вкладку «Кабинет». Название тарифа будет под вашим ФИО.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор общалась вежливо и корректно, явных жалоб или явного негатива со стороны клиента не поступало (#10, #12). Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Пожалуйста. Хорошего вечера!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Первая реакция составила 75 секунд, задержек и долгих пауз не было, ответы ясные и последовательные. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Здравствуйте! Меня зовут Алина.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь и попрощаться. Оператор только попрощалась («Хорошего вечера!»), но не утонила, остались ли еще вопросы. Вывод: Нет.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [],
+          "quote": "Пожалуйста. Хорошего вечера!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "В диалоге отсутствуют оскорбления, предложения услуг в обход компании или утечки конфиденциальных данных. Вывод: Нет.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 4,
+      "conversation_id": "p1-kz-008",
+      "evaluated_at": "2026-11-07T16:50:24+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "KZ",
+        "source_id": "p1-kz-008",
+        "sequence": 23,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Сайттан жеке кабинетке кіретін жерді таппадым.\"}, {\"timestamp\": \"00:01\", \"speaker\": \"bot\", \"text\": \"Сәлеметсіз бе! Мен AIM, Freedom Broker компаниясының жасанды интеллект көмекшісімін. Өнімдер мен қызметтер туралы сұрақтарға жауап бере аламын, шоттарыңыз, активтеріңіз және комиссиялар туралы ақпарат бере аламын, деректерді кестеде салыстыра аламын, менеджеріңіздің байланыс деректерін жібере аламын және сұрағыңызды қолдау қызметіне жолдай аламын.\"}, {\"timestamp\": \"00:01\", \"speaker\": \"bot\", \"text\": \"Әңгімені жалғастыра отырып, дербес деректеріңіздің жиналуына және өңделуіне келісесіз әрі компанияның Құпиялылық саясатымен танысқаныңызды растайсыз.\"}, {\"timestamp\": \"00:13\", \"speaker\": \"bot\", \"text\": \"Қай сайттан кірмек болып жатырсыз?\"}, {\"timestamp\": \"00:32\", \"speaker\": \"client\", \"text\": \"Freedom Finance Global сайты. Операторға қосыңызшы.\"}, {\"timestamp\": \"00:36\", \"speaker\": \"bot\", \"text\": \"Сізді операторға қосайын ба?\"}, {\"timestamp\": \"00:42\", \"speaker\": \"client\", \"text\": \"Иә, рақмет\"}, {\"timestamp\": \"00:43\", \"speaker\": \"bot\", \"text\": \"Күте тұрыңыз, оператор жақында чатқа қосылады.\"}, {\"timestamp\": \"00:46\", \"speaker\": \"system\", \"text\": \"Чат операторға жіберілді.\"}, {\"timestamp\": \"01:24\", \"speaker\": \"operator\", \"text\": \"Сәлем. Қай сайтқа кірдіңіз?\"}, {\"timestamp\": \"01:50\", \"speaker\": \"client\", \"text\": \"Жоғарыда жаздым ғой, Global сайты.\"}, {\"timestamp\": \"02:32\", \"speaker\": \"operator\", \"text\": \"Ол ақпараттық сайт. Сауда шотына tradernet.global веб-нұсқасы немесе Freedom Broker қосымшасы арқылы кіресіз.\"}, {\"timestamp\": \"03:02\", \"speaker\": \"client\", \"text\": \"Ашылды, рақмет.\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 11.67,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5810,
+          "completion_tokens": 1176,
+          "total_tokens": 6986
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 11.67
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться в первой реплике. Оператор поздоровался по-казахски, но имя не назвал (#10). Вывод: Нет.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Сәлем. Қай сайтқа кірдіңіз?",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось проанализировать переписку и не переспрашивать информацию, которую клиент уже предоставил. Клиент указал сайт в реплике #5, однако оператор повторно задал этот вопрос в #10. Вывод: Нет.",
+          "evidence_ids": [
+            5,
+            10
+          ],
+          "checked_range": "#5–#10",
+          "flags": [],
+          "quote": "Сәлем. Қай сайтқа кірдіңіз?",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Запрос касался навигации по сайту и авторизации (общая информация), проведение идентификации не требовалось. Выполнено условие неприменимости. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#13",
+          "flags": [],
+          "quote": "Сайттан жеке кабинетке кіретін жерді таппадым.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось предоставить понятный и корректный ответ по авторизации в личный кабинет. Оператор дал точный адрес сайта для входа и альтернативный вариант (приложение) в #12, клиент подтвердил успешный вход в #13. Вывод: балл 20.",
+          "evidence_ids": [
+            12,
+            13
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Ол ақпараттық сайт. Сауда шотына tradernet.global веб-нұсқасы немесе Freedom Broker қосымшасы арқылы кіресіз.",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось соблюдать вежливость. Клиент явного негатива не выражал, оператор общался корректно и без грубости. Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Сәлем. Қай сайтқа кірдіңіз?",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 7,
+          "explanation": "Оператор переспросил информацию, которую клиент уже давал боту, из-за чего клиенту пришлось указывать на это (#11). Это один заметный сбой в управлении диалогом. Вывод: балл 7.",
+          "evidence_ids": [
+            10,
+            11
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Жоғарыда жаздым ғой, Global сайты.",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь и попрощаться после ответа. Оператор остановился на реплике #12, в конце диалога попрощался только клиент, реакция оператора отсутствует. Вывод: Нет.",
+          "evidence_ids": [
+            12,
+            13
+          ],
+          "checked_range": "#12–#13",
+          "flags": [],
+          "quote": "Ол ақпараттық сайт. Сауда шотына tradernet.global веб-нұсқасы немесе Freedom Broker қосымшасы арқылы кіресіз.",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "При проверке диалога оскорблений, обхода компании или утечки конфиденциальных данных не обнаружено. Вывод: Нет.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Ол ақпараттық сайт. Сауда шотына tradernet.global веб-нұсқасы немесе Freedom Broker қосымшасы арқылы кіресіз.",
+          "quote_ref": 12,
+          "quote_verified": true
+        }
+      }
+    },
+    {
+      "evaluation_id": 5,
+      "conversation_id": "p1-ru-002",
+      "evaluated_at": "2026-11-07T16:50:31+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "RU",
+        "source_id": "p1-ru-002",
+        "sequence": 32,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Почему у меня поменялся тариф? Вчера был другой.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Здравствуйте! Я AIM, AI-ассистент Freedom Broker. Я могу ответить на вопросы о продуктах и услугах, предоставить информацию по вашим счетам, активам и комиссиям, сравнить данные в таблице, отправить контакты вашего менеджера и передать вопрос специалистам поддержки.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Продолжая разговор, Вы соглашаетесь на сбор и обработку персональных данных и подтверждаете, что ознакомились с Политикой конфиденциальности Компании.\"}, {\"timestamp\": \"00:09\", \"speaker\": \"bot\", \"text\": \"Посмотреть текущий тариф можно в кабинете или в отчёте брокера.\"}, {\"timestamp\": \"00:42\", \"speaker\": \"client\", \"text\": \"Я вижу новый. Мне надо понять причину. Позовите сотрудника, пожалуйста.\"}, {\"timestamp\": \"00:45\", \"speaker\": \"bot\", \"text\": \"Желаете, чтобы я соединил Вас с оператором?\"}, {\"timestamp\": \"00:53\", \"speaker\": \"client\", \"text\": \"Да, пожалуйста\"}, {\"timestamp\": \"00:54\", \"speaker\": \"bot\", \"text\": \"Пожалуйста, ожидайте. Оператор скоро подключится к чату.\"}, {\"timestamp\": \"00:57\", \"speaker\": \"system\", \"text\": \"Эскалация на оператора.\"}, {\"timestamp\": \"01:53\", \"speaker\": \"operator\", \"text\": \"Здравствуйте, я Тимур. Понимаю, что неожиданное изменение тарифа может беспокоить. Где вы сравнивали названия тарифов?\"}, {\"timestamp\": \"02:13\", \"speaker\": \"client\", \"text\": \"В старом отчёте и сейчас на сайте.\"}, {\"timestamp\": \"02:34\", \"speaker\": \"operator\", \"text\": \"Отчёт и кабинет могут показывать сведения на разные даты. По этой переписке причину изменения я не вижу. Если нужно проверить именно ваш счёт, понадобится идентификация.\"}, {\"timestamp\": \"02:46\", \"speaker\": \"client\", \"text\": \"Давайте пока без неё. Я ещё даты сверю.\"}, {\"timestamp\": \"03:12\", \"speaker\": \"client\", \"text\": \"А если даты совпадут, что подготовить для проверки?\"}, {\"timestamp\": \"04:02\", \"speaker\": \"operator\", \"text\": \"Напишите, где и когда вы видели каждое название тарифа. Если проверяем ваш счёт, сначала подтвердим личность.\"}, {\"timestamp\": \"04:20\", \"speaker\": \"client\", \"text\": \"В чате надо отправлять сам отчёт?\"}, {\"timestamp\": \"04:40\", \"speaker\": \"operator\", \"text\": \"Для начала достаточно описать, на какой странице и на какую дату вы смотрели. Сам отчёт сюда пока отправлять не нужно.\"}, {\"timestamp\": \"04:50\", \"speaker\": \"client\", \"text\": \"Ясно. Тогда сравню ещё раз.\"}, {\"timestamp\": \"05:17\", \"speaker\": \"operator\", \"text\": \"Хорошо, начните со сверки дат. Если вопрос останется, напишите нам. До свидания!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 8.88,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5926,
+          "completion_tokens": 995,
+          "total_tokens": 6921
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 8.88
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор должен поздороваться на языке клиента и назваться по имени в первой реплике. Оператор поздоровался по-русски и представился Тимуром (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Здравствуйте, я Тимур.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Клиент спросил о причине смены тарифа (#1, #5). Оператор уточнил недостающие детали, где именно клиент сравнивал тарифы (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Где вы сравнивали названия тарифов?",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Запрос клиента касается возможной проверки персонального счёта, однако клиент отказался от идентификации (#13). Оператор корректно не раскрывал конфиденциальных данных без идентификации. Вывод: N/A.",
+          "evidence_ids": [
+            12,
+            13
+          ],
+          "checked_range": "#10–#15",
+          "flags": [],
+          "quote": "Давайте пока без неё.",
+          "quote_ref": 13,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Оператор ответил на все текущие вопросы клиента, пояснил причину возможного расхождения (разные даты в отчёте и кабинете) и дал чёткий алгоритм действий для дальнейшей проверки (#12, #15, #17). Вывод: 20.",
+          "evidence_ids": [
+            12,
+            15,
+            17
+          ],
+          "checked_range": "#10–#19",
+          "flags": [],
+          "quote": "Напишите, где и когда вы видели каждое название тарифа.",
+          "quote_ref": 15,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор проявил эмпатию при беспокойстве клиента из-за смены тарифа. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Понимаю, что неожиданное изменение тарифа может беспокоить.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Ответы оператора понятные, логичные и грамотные, задержек по времени не зафиксировано. Вывод: 10.",
+          "evidence_ids": [
+            10,
+            12,
+            15,
+            17,
+            19
+          ],
+          "checked_range": "#10–#19",
+          "flags": [],
+          "quote": "Отчёт и кабинет могут показывать сведения на разные даты.",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор подвёл итог/предложил дальнейшую помощь и попрощался в реплике #19. Вывод: Да.",
+          "evidence_ids": [
+            19
+          ],
+          "checked_range": "#19",
+          "flags": [],
+          "quote": "Если вопрос останется, напишите нам. До свидания!",
+          "quote_ref": 19,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Никаких грубых нарушений (оскорбления, уход от компании, утечка данных) не выявлено. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#10–#19",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 6,
+      "conversation_id": "p1-ru-003",
+      "evaluated_at": "2026-11-07T16:50:37+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "RU",
+        "source_id": "p1-ru-003",
+        "sequence": 33,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Какая комиссия на тарифе инвестор? Интересует покупка акций.\"}, {\"timestamp\": \"00:04\", \"speaker\": \"bot\", \"text\": \"Здравствуйте! Я AIM, AI-ассистент Freedom Broker. Я могу ответить на вопросы о продуктах и услугах, предоставить информацию по вашим счетам, активам и комиссиям, сравнить данные в таблице, отправить контакты вашего менеджера и передать вопрос специалистам поддержки.\"}, {\"timestamp\": \"00:04\", \"speaker\": \"bot\", \"text\": \"Продолжая разговор, Вы соглашаетесь на сбор и обработку персональных данных и подтверждаете, что ознакомились с Политикой конфиденциальности Компании.\"}, {\"timestamp\": \"00:11\", \"speaker\": \"bot\", \"text\": \"Условия тарифа зависят от параметров сделки. Уточните, на какой площадке хотите купить бумаги.\"}, {\"timestamp\": \"00:57\", \"speaker\": \"client\", \"text\": \"Международный рынок. И где вообще глянуть свой тариф? Можно оператора?\"}, {\"timestamp\": \"01:01\", \"speaker\": \"bot\", \"text\": \"Желаете, чтобы я соединил Вас с оператором?\"}, {\"timestamp\": \"01:12\", \"speaker\": \"client\", \"text\": \"Да\"}, {\"timestamp\": \"01:13\", \"speaker\": \"bot\", \"text\": \"Пожалуйста, ожидайте. Оператор скоро подключится к чату.\"}, {\"timestamp\": \"01:14\", \"speaker\": \"system\", \"text\": \"Эскалация на оператора.\"}, {\"timestamp\": \"01:31\", \"speaker\": \"client\", \"text\": \"Именно на покупку, не на вывод.\"}, {\"timestamp\": \"02:49\", \"speaker\": \"operator\", \"text\": \"Добрый день! Я Лера из поддержки. Вы через приложение или веб-версию смотрите?\"}, {\"timestamp\": \"03:16\", \"speaker\": \"client\", \"text\": \"Через веб.\"}, {\"timestamp\": \"03:59\", \"speaker\": \"operator\", \"text\": \"Откройте «Кабинет», название тарифа под ФИО.\"}, {\"timestamp\": \"04:32\", \"speaker\": \"client\", \"text\": \"Да, «Инвестор». А комиссию где искать?\"}, {\"timestamp\": \"05:07\", \"speaker\": \"operator\", \"text\": \"Название тарифа смотрите там же. Хорошего дня!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 15.35,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5755,
+          "completion_tokens": 1076,
+          "total_tokens": 6831
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 15.35
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться по имени в первой реплике. Оператор поздоровался по-русски и назвался Лерой (#11). Вывод: Да.",
+          "evidence_ids": [
+            11
+          ],
+          "checked_range": "#11",
+          "flags": [],
+          "quote": "Добрый день! Я Лера из поддержки.",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось не переспрашивать уже указанную информацию. Оператор уточнил канал входа (веб/приложение), чтобы дать корректную инструкцию (#11). Вывод: Да.",
+          "evidence_ids": [
+            11
+          ],
+          "checked_range": "#11",
+          "flags": [],
+          "quote": "Вы через приложение или веб-версию смотрите?",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Запрос касался общих условий тарифа и того, где найти название тарифа в интерфейсе. Конфиденциальные данные не раскрывались, проведение идентификации не требовалось. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5,
+            14
+          ],
+          "checked_range": "#1–#15",
+          "flags": [],
+          "quote": "Какая комиссия на тарифе инвестор?",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Клиент задал конкретный вопрос о размерах комиссий на покупку акций на международном рынке по тарифу «Инвестор» (#1, #5, #10, #14). Оператор проигнорировал вопрос о комиссии и дважды отправил смотреть название тарифа (#13, #15). Ответа по существу нет. Вывод: балл 0.",
+          "evidence_ids": [
+            14,
+            15
+          ],
+          "checked_range": "#11–#15",
+          "flags": [],
+          "quote": "Название тарифа смотрите там же.",
+          "quote_ref": 15,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор общался вежливо, не проявлял грубости. Жалоб или негатива со стороны клиента в диалоге не было. Вывод: Да.",
+          "evidence_ids": [
+            11,
+            13,
+            15
+          ],
+          "checked_range": "#11–#15",
+          "flags": [],
+          "quote": "Добрый день! Я Лера из поддержки.",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 7,
+          "explanation": "Диалог велся без нарушения задержек по времени, однако ответы оператора были несвязными с вопросом клиента: в #15 оператор ответил «Название тарифа смотрите там же», хотя клиент спрашивал про комиссию (#14). Вывод: балл 7.",
+          "evidence_ids": [
+            14,
+            15
+          ],
+          "checked_range": "#11–#15",
+          "flags": [],
+          "quote": "А комиссию где искать?",
+          "quote_ref": 14,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось подвести итог/предложить дальнейшую помощь и попрощаться. Оператор попрощался («Хорошего дня!»), но не предпринял попытки уточнить, остались ли вопросы, завершив чат после неотвеченного вопроса (#15). Вывод: Нет.",
+          "evidence_ids": [
+            15
+          ],
+          "checked_range": "#15",
+          "flags": [],
+          "quote": "Название тарифа смотрите там же. Хорошего дня!",
+          "quote_ref": 15,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "В диалоге не зафиксировано грубых нарушений, оскорблений, увода клиентов или утечки данных. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#11–#15",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 7,
+      "conversation_id": "p1-kz-009",
+      "evaluated_at": "2026-11-07T16:50:46+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "KZ",
+        "source_id": "p1-kz-009",
+        "sequence": 24,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Компанияның атын жазсам, бірнеше қағаз шығады. Қайсысы керек екенін білмедім.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Сәлеметсіз бе! Мен AIM, Freedom Broker компаниясының жасанды интеллект көмекшісімін. Өнімдер мен қызметтер туралы сұрақтарға жауап бере аламын, шоттарыңыз, активтеріңіз және комиссиялар туралы ақпарат бере аламын, деректерді кестеде салыстыра аламын, менеджеріңіздің байланыс деректерін жібере аламын және сұрағыңызды қолдау қызметіне жолдай аламын.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Әңгімені жалғастыра отырып, дербес деректеріңіздің жиналуына және өңделуіне келісесіз әрі компанияның Құпиялылық саясатымен танысқаныңызды растайсыз.\"}, {\"timestamp\": \"00:06\", \"speaker\": \"bot\", \"text\": \"Нақты тикері болса, оны «Котировки» бөліміндегі іздеуге жазыңыз.\"}, {\"timestamp\": \"00:38\", \"speaker\": \"client\", \"text\": \"Тикері бар. Операторға қоса аласыз ба?\"}, {\"timestamp\": \"00:43\", \"speaker\": \"bot\", \"text\": \"Сізді операторға қосайын ба?\"}, {\"timestamp\": \"00:52\", \"speaker\": \"client\", \"text\": \"Иә\"}, {\"timestamp\": \"00:53\", \"speaker\": \"bot\", \"text\": \"Күте тұрыңыз, оператор жақында чатқа қосылады.\"}, {\"timestamp\": \"00:54\", \"speaker\": \"system\", \"text\": \"Чат операторға жіберілді.\"}, {\"timestamp\": \"01:08\", \"speaker\": \"client\", \"text\": \"Тикерді жазып алдым.\"}, {\"timestamp\": \"02:04\", \"speaker\": \"operator\", \"text\": \"Сәлеметсіз бе! Мен Айсұлумын. Тикерді іздеу жолағына енгізіңіз де, нәтижеден сол тикері бар қағазды ашыңыз.\"}, {\"timestamp\": \"02:37\", \"speaker\": \"client\", \"text\": \"Иә, таптым. Сатып алу үшін ары қарай не істеймін?\"}, {\"timestamp\": \"03:04\", \"speaker\": \"operator\", \"text\": \"Сол қағазды таңдап, сатып алу өтінімінің параметрлерін толтырыңыз.\"}, {\"timestamp\": \"03:19\", \"speaker\": \"client\", \"text\": \"Түсінікті, көп рақмет.\"}, {\"timestamp\": \"03:25\", \"speaker\": \"client\", \"text\": \"Менде екі ұқсас қағаз шығады. Біреуінде атауы ұқсас, бірақ тикері басқа.\"}, {\"timestamp\": \"03:53\", \"speaker\": \"operator\", \"text\": \"Сізде нақты тикер болса, соған сәйкес келетін нәтижені ашыңыз.\"}, {\"timestamp\": \"04:17\", \"speaker\": \"client\", \"text\": \"Аштым. Өтінімді бірден жібергім келмейді, алдымен қарап шығайын.\"}, {\"timestamp\": \"04:58\", \"speaker\": \"operator\", \"text\": \"Жарайды. Параметрлерді қарап шығыңыз. Сатып алуды қаласаңыз ғана өтінімді жіберіңіз.\"}, {\"timestamp\": \"05:04\", \"speaker\": \"client\", \"text\": \"Түсіндім. Рақмет!\"}, {\"timestamp\": \"05:21\", \"speaker\": \"operator\", \"text\": \"Оқасы жоқ. Сау болыңыз!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 16.02,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 6119,
+          "completion_tokens": 1221,
+          "total_tokens": 7340
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 16.03
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться в первой реплике. Оператор в реплике #11 поздоровался на казахском языке («Сәлеметсіз бе!») и назвал своё имя («Мен Айсұлумын»). Вывод: Да.",
+          "evidence_ids": [
+            11
+          ],
+          "checked_range": "#11",
+          "flags": [],
+          "quote": "Сәлеметсіз бе! Мен Айсұлумын.",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось выявить потребность клиента, если информации не хватало. Клиент сразу сообщил общую суть вопроса о поиске бумаги по тикеру и затем уточнил детали, дополнительных уточнений от оператора до ответа не требовалось. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#11",
+          "flags": [],
+          "quote": "Компанияның атын жазсам, бірнеше қағаз шығады. Қайсысы керек екенін білмедім.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось проверить необходимость идентификации. Вопрос клиента касался общей инструкции по поиску ценных бумаг по тикеру и оформлению заявки в приложении, что не требует раскрытия персональных данных или доступа к счету. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#20",
+          "flags": [],
+          "quote": "Компанияның атын жазсам, бірнеше қағаз шығады. Қайсысы керек екенін білмедім.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось дать точный и полный ответ по запросу клиента. Оператор корректно проконсультировал, как найти нужную ценную бумагу по тикеру и как выставить өтінім (заявку) на покупку, полностью ответив на все вопросы. Вывод: балл 20.",
+          "evidence_ids": [
+            11,
+            13,
+            16,
+            18
+          ],
+          "checked_range": "#11–#20",
+          "flags": [],
+          "quote": "Тикерді іздеу жолағына енгізіңіз де, нәтижеден сол тикері бар қағазды ашыңыз.",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось сохранять вежливость и отреагировать на негатив при его наличии. Диалог прошёл вежливо, клиент явного негатива не выражал, оператор общался корректно и доброжелательно. Вывод: Да.",
+          "evidence_ids": [
+            11,
+            20
+          ],
+          "checked_range": "#11–#20",
+          "flags": [],
+          "quote": "Оқасы жоқ. Сау болыңыз!",
+          "quote_ref": 20,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось последовательно ведение диалога без неразумных задержек. Ответы оператора были понятными, последовательными, время первой реакции составило 124 секунды (менее 3 минут), пауз не было. Вывод: балл 10.",
+          "evidence_ids": [
+            11,
+            13,
+            16,
+            18,
+            20
+          ],
+          "checked_range": "#11–#20",
+          "flags": [],
+          "quote": "Оқасы жоқ. Сау болыңыз!",
+          "quote_ref": 20,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь или подвести итоги и попрощаться. В реплике #20 оператор попрощался («Сау болыңыз!»), однако вопрос о наличии других вопросов или предложение помощи отсутствовали. Вывод: Нет.",
+          "evidence_ids": [
+            20
+          ],
+          "checked_range": "#19–#20",
+          "flags": [],
+          "quote": "Оқасы жоқ. Сау болыңыз!",
+          "quote_ref": 20,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось проверить отсутствие грубых нарушений (оскорбления, увод клиента, утечка данных). В репликах оператора отсутствуют какие-либо грубые нарушения. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#11–#20",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 8,
+      "conversation_id": "p1-ru-004",
+      "evaluated_at": "2026-11-07T16:51:53+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "RU",
+        "source_id": "p1-ru-004",
+        "sequence": 34,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Как пополнить брокерский счёт переводом через отделение банка?\"}, {\"timestamp\": \"00:01\", \"speaker\": \"bot\", \"text\": \"Здравствуйте! Я AIM, AI-ассистент Freedom Broker. Я могу ответить на вопросы о продуктах и услугах, предоставить информацию по вашим счетам, активам и комиссиям, сравнить данные в таблице, отправить контакты вашего менеджера и передать вопрос специалистам поддержки.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Продолжая разговор, Вы соглашаетесь на сбор и обработку персональных данных и подтверждаете, что ознакомились с Политикой конфиденциальности Компании.\"}, {\"timestamp\": \"00:10\", \"speaker\": \"bot\", \"text\": \"Реквизиты для перевода можно скачать в приложении Freedom Broker.\"}, {\"timestamp\": \"00:23\", \"speaker\": \"client\", \"text\": \"В приложении несколько вариантов пополнения. Соедините с оператором.\"}, {\"timestamp\": \"00:28\", \"speaker\": \"bot\", \"text\": \"Желаете, чтобы я соединил Вас с оператором?\"}, {\"timestamp\": \"00:42\", \"speaker\": \"client\", \"text\": \"да\"}, {\"timestamp\": \"00:43\", \"speaker\": \"bot\", \"text\": \"Пожалуйста, ожидайте. Оператор скоро подключится к чату.\"}, {\"timestamp\": \"00:45\", \"speaker\": \"system\", \"text\": \"Эскалация на оператора.\"}, {\"timestamp\": \"02:19\", \"speaker\": \"operator\", \"text\": \"Здравствуйте, я Артём. Вам нужны реквизиты для пополнения, верно? В приложении откройте «Меню → Пополнить → Перевод по реквизитам».\"}, {\"timestamp\": \"02:53\", \"speaker\": \"client\", \"text\": \"Нужны в евро, там это выбрать можно?\"}, {\"timestamp\": \"03:21\", \"speaker\": \"operator\", \"text\": \"Да, скачайте реквизиты в нужной валюте и передайте их в банке для перевода.\"}, {\"timestamp\": \"03:39\", \"speaker\": \"client\", \"text\": \"Нашёл, теперь понятно.\"}, {\"timestamp\": \"04:21\", \"speaker\": \"operator\", \"text\": \"Отлично. Хорошего дня!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 13.57,
+        "attempts": 2,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5742,
+          "completion_tokens": 1024,
+          "total_tokens": 6766
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 13.57
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться в первой реплике. Оператор в реплике #10 поздоровался по-русски и назвался Артёмом. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Здравствуйте, я Артём.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проверить, хватало ли данных для ответа или уточнил ли оператор детали. В реплике #10 оператор уточняет потребность клиентом перед отправкой полной инструкции. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Вам нужны реквизиты для пополнения, верно?",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Запрос касался общего порядка пополнения брокерского счёта через реквизиты и не требовал идентификации клиента. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#14",
+          "flags": [],
+          "quote": "Как пополнить брокерский счёт переводом через отделение банка?",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось ответить на все вопросы клиента. Оператор верно подсказал путь в приложении (#10) и подтвердил возможность выбора валюты (#12), полностью закрыв запрос. Вывод: балл 20.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Да, скачайте реквизиты в нужной валюте и передайте их в банке для перевода.",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор общался вежливо на протяжении всего диалога, негатива или жалоб от клиента не поступало. Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12,
+            14
+          ],
+          "checked_range": "#10–#14",
+          "flags": [],
+          "quote": "Отлично. Хорошего дня!",
+          "quote_ref": 14,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Ответы логичные, понятные, задержек сверх нормы нет (первая реакция за 139 секунд при норме 180). Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12,
+            14
+          ],
+          "checked_range": "#10–#14",
+          "flags": [],
+          "quote": "В приложении откройте «Меню → Пополнить → Перевод по реквизитам».",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось предложить дальнейшую помощь/подвести итог и попрощаться. Оператор подвёл итог и попрощался в реплике #14 («Отлично. Хорошего дня!»). Вывод: Да.",
+          "evidence_ids": [
+            14
+          ],
+          "checked_range": "#14",
+          "flags": [],
+          "quote": "Отлично. Хорошего дня!",
+          "quote_ref": 14,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Грубых нарушений (оскорбления, увод в обход компании, утечка данных) в диалоге не обнаружено. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#10–#14",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 9,
+      "conversation_id": "p1-ru-005",
+      "evaluated_at": "2026-11-07T16:52:02+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "RU",
+        "source_id": "p1-ru-005",
+        "sequence": 35,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Хочу пополнить счёт и не понимаю, кто возьмёт комиссию — банк или брокер.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Здравствуйте! Я AIM, AI-ассистент Freedom Broker. Я могу ответить на вопросы о продуктах и услугах, предоставить информацию по вашим счетам, активам и комиссиям, сравнить данные в таблице, отправить контакты вашего менеджера и передать вопрос специалистам поддержки.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Продолжая разговор, Вы соглашаетесь на сбор и обработку персональных данных и подтверждаете, что ознакомились с Политикой конфиденциальности Компании.\"}, {\"timestamp\": \"00:11\", \"speaker\": \"bot\", \"text\": \"Условия зависят от способа пополнения. Каким способом хотите переводить?\"}, {\"timestamp\": \"00:37\", \"speaker\": \"client\", \"text\": \"По реквизитам из отделения. Дайте, пожалуйста, оператора.\"}, {\"timestamp\": \"00:38\", \"speaker\": \"bot\", \"text\": \"Желаете, чтобы я соединил Вас с оператором?\"}, {\"timestamp\": \"00:55\", \"speaker\": \"client\", \"text\": \"Да, пожалуйста\"}, {\"timestamp\": \"00:56\", \"speaker\": \"bot\", \"text\": \"Пожалуйста, ожидайте. Оператор скоро подключится к чату.\"}, {\"timestamp\": \"00:59\", \"speaker\": \"system\", \"text\": \"Эскалация на оператора.\"}, {\"timestamp\": \"02:52\", \"speaker\": \"operator\", \"text\": \"Добрый день, меня зовут Нина. Сумму комиссии без условий вашего банка я назвать не могу.\"}, {\"timestamp\": \"03:33\", \"speaker\": \"client\", \"text\": \"Ок, у банка узнаю. А реквизиты где найти?\"}, {\"timestamp\": \"04:23\", \"speaker\": \"operator\", \"text\": \"Там же где перевод, не в отчете, сверху вниз в меню.\"}, {\"timestamp\": \"05:02\", \"speaker\": \"client\", \"text\": \"В каком меню? Я уже в приложении.\"}, {\"timestamp\": \"05:51\", \"speaker\": \"operator\", \"text\": \"Извините, уточню: «Меню → Пополнить → Перевод по реквизитам». Выберите нужную валюту.\"}, {\"timestamp\": \"06:28\", \"speaker\": \"client\", \"text\": \"Теперь вижу.\"}, {\"timestamp\": \"07:16\", \"speaker\": \"operator\", \"text\": \"Хорошо. Перед переводом проверьте комиссию в банке. До свидания!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 22.06,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5808,
+          "completion_tokens": 1164,
+          "total_tokens": 6972
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 22.06
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор должен поздороваться на языке клиента и представиться в первом ответе. В первой реплике оператор поздоровался на русском языке («Добрый день») и назвал своё имя («меня зовут Нина»). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Добрый день, меня зовут Нина.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Клиент изначально попросил помощь в пополнении и уточнил способ «по реквизитам из отделения» (#5). Данных для первого ответа по комиссии и последующего ответа по реквизитам было достаточно с самого начала. Вывод: N/A.",
+          "evidence_ids": [
+            5
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "По реквизитам из отделения. Дайте, пожалуйста, оператора.",
+          "quote_ref": 5,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Клиент задавал общие вопросы о комиссии банка и о том, где найти реквизиты для пополнения в приложении, что не требует предоставления персональных данных или совершения защищенных операций по счету. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            11
+          ],
+          "checked_range": "#1–#16",
+          "flags": [],
+          "quote": "А реквизиты где найти?",
+          "quote_ref": 11,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Оператор ответил про комиссию банка (#10), а после уточнения корректно и полностью объяснил путь к реквизитам в приложении: «Меню → Пополнить → Перевод по реквизитам» (#14). Все вопросы клиента успешно закрыты. Вывод: балл 20.",
+          "evidence_ids": [
+            10,
+            14,
+            15
+          ],
+          "checked_range": "#10–#16",
+          "flags": [],
+          "quote": "«Меню → Пополнить → Перевод по реквизитам». Выберите нужную валюту.",
+          "quote_ref": 14,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Оператор общался вежливо, клиентом не выражалось недовольство или негативные эмоции. Вывод: Да.",
+          "evidence_ids": [
+            10,
+            14,
+            16
+          ],
+          "checked_range": "#10–#16",
+          "flags": [],
+          "quote": "Извините, уточню: «Меню → Пополнить → Перевод по реквизитам».",
+          "quote_ref": 14,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 7,
+          "explanation": "В реплике #12 оператор дал неясный и спутанный ответ («Там же где перевод, не в отчете, сверху вниз в меню»), из-за чего клиенту пришлось переспрашивать («В каком меню?», #13). В реплике #14 оператор исправился и дал четкий алгоритм. Вывод: балл 7.",
+          "evidence_ids": [
+            12,
+            13,
+            14
+          ],
+          "checked_range": "#10–#16",
+          "flags": [],
+          "quote": "Там же где перевод, не в отчете, сверху вниз в меню.",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось завершить диалог предложением дальнейшей помощи / подведением итогов и прощанием. В реплике #16 оператор попрощался («До свидания!») и напомнил о проверке комиссии, но не предложил дальнейшую помощь / не уточнил, остались ли вопросы. Вывод: Нет.",
+          "evidence_ids": [
+            16
+          ],
+          "checked_range": "#16",
+          "flags": [],
+          "quote": "Хорошо. Перед переводом проверьте комиссию в банке. До свидания!",
+          "quote_ref": 16,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "В ходе диалога не зафиксировано оскорблений, предложений услуг в обход компании или утечки конфиденциальных данных. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#1–#16",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 10,
+      "conversation_id": "p1-ru-006",
+      "evaluated_at": "2026-11-07T16:52:08+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "RU",
+        "source_id": "p1-ru-006",
+        "sequence": 36,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Пополняла со своей карты, а в приложении денег всё ещё нет.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Здравствуйте! Я AIM, AI-ассистент Freedom Broker. Я могу ответить на вопросы о продуктах и услугах, предоставить информацию по вашим счетам, активам и комиссиям, сравнить данные в таблице, отправить контакты вашего менеджера и передать вопрос специалистам поддержки.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Продолжая разговор, Вы соглашаетесь на сбор и обработку персональных данных и подтверждаете, что ознакомились с Политикой конфиденциальности Компании.\"}, {\"timestamp\": \"00:13\", \"speaker\": \"bot\", \"text\": \"Уточните, пожалуйста, вам нужна инструкция по пополнению или проверка уже отправленного платежа?\"}, {\"timestamp\": \"00:52\", \"speaker\": \"client\", \"text\": \"Уже отправила. Хочу, чтобы человек проверил, подключите.\"}, {\"timestamp\": \"00:54\", \"speaker\": \"bot\", \"text\": \"Желаете, чтобы я соединил Вас с оператором?\"}, {\"timestamp\": \"01:14\", \"speaker\": \"client\", \"text\": \"Да\"}, {\"timestamp\": \"01:15\", \"speaker\": \"bot\", \"text\": \"Пожалуйста, ожидайте. Оператор скоро подключится к чату.\"}, {\"timestamp\": \"01:16\", \"speaker\": \"system\", \"text\": \"Эскалация на оператора.\"}, {\"timestamp\": \"03:28\", \"speaker\": \"operator\", \"text\": \"Здравствуйте, меня зовут Роман. Понимаю, что вы переживаете из-за платежа. Сначала нужно подтвердить личность, чтобы проверить счёт.\"}, {\"timestamp\": \"03:40\", \"speaker\": \"client\", \"text\": \"Готова пройти проверку.\"}, {\"timestamp\": \"03:58\", \"speaker\": \"system\", \"text\": \"Личность клиента подтверждена.\"}, {\"timestamp\": \"04:25\", \"speaker\": \"operator\", \"text\": \"Спасибо. Я передал вопрос по зачислению специалистам. Укажите, пожалуйста, в какой валюте был перевод, чтобы я добавил это к обращению.\"}, {\"timestamp\": \"04:55\", \"speaker\": \"client\", \"text\": \"В тенге.\"}, {\"timestamp\": \"05:43\", \"speaker\": \"operator\", \"text\": \"Добавил. Когда по платежу будет ответ, мы сообщим вам в этом чате. Спасибо, что подождали. До свидания!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 26.38,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5820,
+          "completion_tokens": 1006,
+          "total_tokens": 6826
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 26.38
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться и представиться в первой реплике оператора. Оператор поздоровался по-русски и назвал свое имя (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Здравствуйте, меня зовут Роман.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось уточнить недостающие детали перед обработкой запроса. Клиент сообщил о заполнении со своей карты, оператор уточнил валюту перевода (#13) до передачи полного тикета. Вывод: Да.",
+          "evidence_ids": [
+            13
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "quote": "Укажите, пожалуйста, в какой валюте был перевод, чтобы я добавил это к обращению.",
+          "quote_ref": 13,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалась идентификация до проверки счета или передачи персональных данных. Оператор запросил идентификацию и не раскрывал данные до подтверждения системой (#12). Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Сначала нужно подтвердить личность, чтобы проверить счёт.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось проконсультировать клиента или дать четкий следующий шаг. Оператор передал обращение специалистам и сообщил, что ответ поступит в этот чат (#15). Вывод: балл 20.",
+          "evidence_ids": [
+            13,
+            15
+          ],
+          "checked_range": "#10–#15",
+          "flags": [],
+          "quote": "Когда по платежу будет ответ, мы сообщим вам в этом чате.",
+          "quote_ref": 15,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявить эмпатию к обеспокоенности клиента задержкой денег. Оператор выразил понимание в первом же ответе (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Понимаю, что вы переживаете из-за платежа.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 7,
+          "explanation": "Требовалось соблюдать скорость реакции и понятность. Первая реакция оператора составила 208 секунд (более 3 минут порога). Вывод: балл 7.",
+          "evidence_ids": [
+            1,
+            10
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Здравствуйте, меня зовут Роман.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось завершить диалог с подведением итогов/благодарностью и прощанием. Оператор поблагодарил и попрощался (#15). Вывод: Да.",
+          "evidence_ids": [
+            15
+          ],
+          "checked_range": "#15",
+          "flags": [],
+          "quote": "Спасибо, что подождали. До свидания!",
+          "quote_ref": 15,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось проверить отсутствие грубых нарушений. Оскорблений, предложений в обход компании и утечек информации не зафиксировано. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#10–#15",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 11,
+      "conversation_id": "p1-en-002",
+      "evaluated_at": "2026-11-07T16:52:15+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-002",
+        "sequence": 2,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Where is the sign-in button? I'm on the Freedom Finance Global website.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:09\", \"speaker\": \"bot\", \"text\": \"That site is for company information. You can access your account on the trading platform.\"}, {\"timestamp\": \"00:42\", \"speaker\": \"client\", \"text\": \"Could you connect me with a person? I have a few tabs open and I'm not sure which is which.\"}, {\"timestamp\": \"00:45\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"00:53\", \"speaker\": \"client\", \"text\": \"Yes, please\"}, {\"timestamp\": \"00:54\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"00:57\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"01:53\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Noah. Open tradernet.global for the browser version, or use the Freedom Broker app. The company information site doesn't have the sign-in page.\"}, {\"timestamp\": \"02:13\", \"speaker\": \"client\", \"text\": \"I'm on a laptop. The web version works. Thanks.\"}, {\"timestamp\": \"02:34\", \"speaker\": \"operator\", \"text\": \"Glad you got in. Have a good day!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 28.67,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5678,
+          "completion_tokens": 1118,
+          "total_tokens": 6796
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 28.68
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента (английский) и представиться в первой реплике. Оператор поздоровался и назвал свое имя (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Hi, I'm Noah.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось определить потребность клиента. Клиент изначально спросил, где кнопка входа на сайт (#1), а затем уточнил, что запутан в вкладках (#5). Данных хватало для ответа, уточнения не требовались. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Where is the sign-in button? I'm on the Freedom Finance Global website.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось определить необходимость идентификации. Клиент задавал общий технический вопрос по поиску страницы входа на торговую платформу, что не требует проверки персональных данных. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Where is the sign-in button? I'm on the Freedom Finance Global website.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось дать точный ответ на вопрос клиента, как войти в личный кабинет. Оператор предоставил прямую ссылку/адрес веб-версии tradernet.global и объяснил, что на основном инфо-сайте кнопки входа нет (#10). Запрос клиента полностью решен. Вывод: балл 20.",
+          "evidence_ids": [
+            10,
+            11
+          ],
+          "checked_range": "#10–#11",
+          "flags": [],
+          "quote": "Open tradernet.global for the browser version, or use the Freedom Broker app. The company information site doesn't have the sign-in page.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось соблюдать вежливость. Клиент не выражал явного негатива, оператор общался вежливо и позитивно (#10, #12). Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Glad you got in. Have a good day!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось сохранять логику, ясность ответа и контролировать время реакции. Оператор ответил за 113 секунд (в рамках нормы 3 мин), реплики сформулированы четко и понятно. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Glad you got in. Have a good day!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось подвести итог/предложить помощь и попрощаться. Оператор высказал радость за решение вопроса и попрощался («Have a good day!») в #12, однако предложение дальнейшей помощи пропустил. Вывод: Нет.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [],
+          "quote": "Glad you got in. Have a good day!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Грубых нарушений (оскорбления, увод клиента, утечка данных) в диалоге не зафиксировано. Вывод: Нет.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Glad you got in. Have a good day!",
+          "quote_ref": 12,
+          "quote_verified": true
+        }
+      }
+    },
+    {
+      "evaluation_id": 12,
+      "conversation_id": "p1-en-003",
+      "evaluated_at": "2026-11-07T16:52:22+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-003",
+        "sequence": 3,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Where can I see my current pricing plan? I'm using the website.\"}, {\"timestamp\": \"00:04\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:04\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:11\", \"speaker\": \"bot\", \"text\": \"The current plan is shown in the broker report.\"}, {\"timestamp\": \"00:57\", \"speaker\": \"client\", \"text\": \"I don't want to download a report just for this. Can I speak to an agent?\"}, {\"timestamp\": \"01:01\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"01:12\", \"speaker\": \"client\", \"text\": \"Yes\"}, {\"timestamp\": \"01:13\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"01:14\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"02:29\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Eva. Open the account area, labelled «Кабинет» in the Russian interface. You'll see your plan under your name.\"}, {\"timestamp\": \"02:56\", \"speaker\": \"client\", \"text\": \"Found it.\"}, {\"timestamp\": \"03:39\", \"speaker\": \"operator\", \"text\": \"Great. Thanks for reaching out, and goodbye!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "seconds": 34.95,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 5647,
+          "completion_tokens": 1099,
+          "total_tokens": 6746
+        },
+        "cost_usd": 0.0,
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 34.95
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента (английском) и представиться в первой реплике. Оператор поздоровалась («Hi») и назвала своё имя («I'm Eva») в первом ответе (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "quote": "Hi, I'm Eva.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось выяснить потребность, если информации не хватало. Клиент сразу указал свой вопрос и платформу («Where can I see my current pricing plan? I'm using the website.»), информации для ответа было достаточно. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Where can I see my current pricing plan? I'm using the website.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось проверить необходимость идентификации. Клиент задал общий вопрос о том, где посмотреть свой тарифный план на сайте, без запроса персональных данных или операций по счету оператором. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "quote": "Where can I see my current pricing plan?",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось предоставить точную и полную консультацию. Оператор дала четкую инструкцию, где именно в личной кабинете на сайте увидеть свой тариф («Open the account area... You'll see your plan under your name»), клиент подтверил успешность («Found it»). Вывод: балл 20.",
+          "evidence_ids": [
+            10,
+            11
+          ],
+          "checked_range": "#10–#11",
+          "flags": [],
+          "quote": "Open the account area, labelled «Кабинет» in the Russian interface. You'll see your plan under your name.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявлять вежливость. Клиент не выражал негатива, оператор общалась вежливо и профессионально. Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Thanks for reaching out, and goodbye!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось поддерживать логику, ясность общения и соблюдать временные рамки. Время ожидания в норме (первый ответ за 149 с), ответы понятны и логичны. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "Great. Thanks for reaching out, and goodbye!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь/подвести итог и попрощаться. Оператор подвел итог («Great»), поблагодарил за обращение и попрощался («Thanks for reaching out, and goodbye!»), однако явное предложение дальнейшей помощи (например, «Anything else?») или вопроса об оставшихся вопросах отсутствовало. Вывод: Нет.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [],
+          "quote": "Great. Thanks for reaching out, and goodbye!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Грубых нарушений (оскорбления, увод клиента, утечка данных) в диалоге не зафиксировано. Вывод: Нет.",
+          "evidence_ids": [],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "quote": "",
+          "quote_ref": 0,
+          "quote_verified": false
+        }
+      }
+    },
+    {
+      "evaluation_id": 13,
+      "conversation_id": "p1-en-001",
+      "evaluated_at": "2026-11-07T18:39:28+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-001",
+        "sequence": 1,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"I'm opening a new account and the app says my login is taken.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:08\", \"speaker\": \"bot\", \"text\": \"Did you previously use that login for another account?\"}, {\"timestamp\": \"00:28\", \"speaker\": \"client\", \"text\": \"Yes, I closed that account. Can I talk to a support agent?\"}, {\"timestamp\": \"00:30\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"00:35\", \"speaker\": \"client\", \"text\": \"yes please\"}, {\"timestamp\": \"00:36\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"00:38\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"01:15\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Maya from support. A login stays on record after the account is closed. Use a different login for the new registration.\"}, {\"timestamp\": \"01:28\", \"speaker\": \"client\", \"text\": \"Right, I thought I'd just have to wait. Thanks.\"}, {\"timestamp\": \"02:04\", \"speaker\": \"operator\", \"text\": \"You're welcome. Take care!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "fallback_used": false,
+        "seconds": 24.13,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 6499,
+          "completion_tokens": 1258,
+          "total_tokens": 7757
+        },
+        "cost_usd": 0.0,
+        "prompt_version": "cqa-v3",
+        "criteria_prompt_versions": {
+          "c01_contact": "cqa-v3",
+          "c02_needs": "cqa-v3",
+          "c03_ident": "cqa-v3",
+          "c04_consult": "cqa-v3",
+          "c05_empathy": "cqa-v3",
+          "c06_flow": "cqa-v3",
+          "c07_closing": "cqa-v3",
+          "c08_gross": "cqa-v3"
+        },
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 24.13
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента (EN) и представиться в первой реплике. Оператор поздоровалась («Hi») и представилась («I'm Maya») в реплике #10. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Maya from support.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось выявить потребность или учесть имеющиеся данные. Клиент указал, что открывает новый аккаунт и его логин занят (#1), подтвердив, что старый аккаунт закрыл (#5). Данных хватало, уточнять ничего не требовалось. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "I'm opening a new account and the app says my login is taken.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось проверить необходимость идентификации. Запрос касается общей логики приложения при занятом логине и не требует доступа к персональным данным или операциям по счёту. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "I'm opening a new account and the app says my login is taken.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось дать точный ответ или корректный следующий шаг. Оператор пояснила, что логин сохраняется в системе после закрытия аккаунта, и порекомендовала использовать другой логин (#10). Запрос полностью решён. Вывод: балл 20.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "A login stays on record after the account is closed. Use a different login for the new registration.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявлять вежливость. Клиент не выражал негативных эмоций, оператор вежливо ответила и попрощалась. Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось вести диалог логично, ясно и без задержек. Оператор быстро ответила, дала понятное объяснение и корректно попрощалась. Сбоев нет. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось попрощаться и подвести итог/предложить помощь. Оператор ответила на «спасибо» от клиента фразой «You're welcome. Take care!» (#12), завершив разговор вежливым прощанием, однако не спросила, остались ли другие вопросы. Поскольку предложение помощи отсутствовало, а только лишь прощание — Вывод: Нет.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Грубых нарушений (оскорбления, увод клиента, утечка данных) в диалоге не обнаружено. Вывод: 0.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Maya from support.",
+          "quote_ref": 10,
+          "quote_verified": true
+        }
+      }
+    },
+    {
+      "evaluation_id": 14,
+      "conversation_id": "p1-en-002",
+      "evaluated_at": "2026-11-07T18:39:43+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-002",
+        "sequence": 2,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"Where is the sign-in button? I'm on the Freedom Finance Global website.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:09\", \"speaker\": \"bot\", \"text\": \"That site is for company information. You can access your account on the trading platform.\"}, {\"timestamp\": \"00:42\", \"speaker\": \"client\", \"text\": \"Could you connect me with a person? I have a few tabs open and I'm not sure which is which.\"}, {\"timestamp\": \"00:45\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"00:53\", \"speaker\": \"client\", \"text\": \"Yes, please\"}, {\"timestamp\": \"00:54\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"00:57\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"01:53\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Noah. Open tradernet.global for the browser version, or use the Freedom Broker app. The company information site doesn't have the sign-in page.\"}, {\"timestamp\": \"02:13\", \"speaker\": \"client\", \"text\": \"I'm on a laptop. The web version works. Thanks.\"}, {\"timestamp\": \"02:34\", \"speaker\": \"operator\", \"text\": \"Glad you got in. Have a good day!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "fallback_used": false,
+        "seconds": 8.53,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 6530,
+          "completion_tokens": 1301,
+          "total_tokens": 7831
+        },
+        "cost_usd": 0.0,
+        "prompt_version": "cqa-v3",
+        "criteria_prompt_versions": {
+          "c01_contact": "cqa-v3",
+          "c02_needs": "cqa-v3",
+          "c03_ident": "cqa-v3",
+          "c04_consult": "cqa-v3",
+          "c05_empathy": "cqa-v3",
+          "c06_flow": "cqa-v3",
+          "c07_closing": "cqa-v3",
+          "c08_gross": "cqa-v3"
+        },
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 8.53
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента и представиться в первой реплике. Оператор поздоровался на английском языке и назвал своё имя Noah в первом сообщении (#10). Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Noah.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось уточнить детали запроса, если их не хватало. Клиент уже в первом сообщении указал, что ищет кнопку входа на сайте, данных было достаточно для ответа. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Where is the sign-in button? I'm on the Freedom Finance Global website.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось пройти идентификацию, если запрос касался персональных данных или операций по счету. Вопрос клиента касался общей навигации по сайту и веб-платформе, что не требует идентификации. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Where is the sign-in button? I'm on the Freedom Finance Global website.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось дать точный и полный ответ на вопрос клиента. Оператор корректно объяснил, что на основном информационном сайте кнопки входа нет, и предоставил верный адрес торговой платформы tradernet.global для входа с ноутбука (#10), что полностью решило проблему клиента (#11). Вывод: балл 20.",
+          "evidence_ids": [
+            10,
+            11
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Open tradernet.global for the browser version, or use the Freedom Broker app.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявлять вежливость и клиентоориентированность. Оператор вежлив, порадовался успешному входу клиента и пожелал хорошего дня (#12), негатива со стороны клиента не было. Вывод: Да.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Glad you got in. Have a good day!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось грамотно и логично вести диалог без пауз и путаницы. Диалог проведен четко, без лишних переспросов, паузы не превышают установленный порог. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Open tradernet.global for the browser version, or use the Freedom Broker app. The company information site doesn't have the sign-in page.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось завершить диалог прощанием и/или предложением дальнейшей помощи. Оператор в конце попрощался с клиентом («Have a good day!») после успешного решения вопроса (#12). Вывод: Да.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Glad you got in. Have a good day!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось проверить отсутствие грубых нарушений (оскорбления, увод клиента, утечка данных). Грубых нарушений не выявлено. Вывод: Нет.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Noah. Open tradernet.global for the browser version, or use the Freedom Broker app. The company information site doesn't have the sign-in page.",
+          "quote_ref": 10,
+          "quote_verified": true
+        }
+      }
+    },
+    {
+      "evaluation_id": 15,
+      "conversation_id": "p1-en-013",
+      "evaluated_at": "2026-11-07T18:40:04+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-013",
+        "sequence": 13,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"I'm trying to figure out how to find bonds in the app.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:11\", \"speaker\": \"bot\", \"text\": \"Use Quotes to search by the name or ticker.\"}, {\"timestamp\": \"00:49\", \"speaker\": \"client\", \"text\": \"Can I speak to an agent? I haven't used this section before.\"}, {\"timestamp\": \"00:53\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"01:14\", \"speaker\": \"client\", \"text\": \"yes please\"}, {\"timestamp\": \"01:15\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"01:17\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"03:30\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Adrian. Open Quotes and search by the bond's name or ticker.\"}, {\"timestamp\": \"03:55\", \"speaker\": \"client\", \"text\": \"Okay, I see the search bar now.\"}, {\"timestamp\": \"04:36\", \"speaker\": \"operator\", \"text\": \"Send me your personal number and I'll call you after work. I charge for private advice and can tell you which bonds to buy.\"}, {\"timestamp\": \"05:03\", \"speaker\": \"client\", \"text\": \"No, I'm only asking for help with the app.\"}, {\"timestamp\": \"05:31\", \"speaker\": \"system\", \"text\": \"Agent closed the chat.\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "fallback_used": false,
+        "seconds": 7.59,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 6582,
+          "completion_tokens": 1255,
+          "total_tokens": 7837
+        },
+        "cost_usd": 0.0,
+        "prompt_version": "cqa-v3",
+        "criteria_prompt_versions": {
+          "c01_contact": "cqa-v3",
+          "c02_needs": "cqa-v3",
+          "c03_ident": "cqa-v3",
+          "c04_consult": "cqa-v3",
+          "c05_empathy": "cqa-v3",
+          "c06_flow": "cqa-v3",
+          "c07_closing": "cqa-v3",
+          "c08_gross": "cqa-v3"
+        },
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 7.6
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться на языке клиента (английском) и представиться в первой реплике. Оператор поздоровался («Hi») и назвался («I'm Adrian») в реплике #10. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Adrian.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось выявить потребность при необходимости. Данных из первого вопроса клиента о поиске облигаций в приложении было достаточно для предоставления общей инструкции. Уточнения не требовались. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "I'm trying to figure out how to find bonds in the app.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось определить необходимость идентификации. Запрос клиента касался общей навигации по приложению (как найти облигации) и не требовал доступа к персональным данным или защищенным действиям. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "I'm trying to figure out how to find bonds in the app.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось дать корректный ответ по запросу. Оператор дал верную инструкцию по поиску облигаций в приложении (#10), подсказав открыть Quotes и использовать поиск по названию/тикеру. По запросу навигации вопрос закрыт полностью. Вывод: балл 20.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Open Quotes and search by the bond's name or ticker.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявить вежливость и эмпатию. Оператор был вежлив, явного недовольства со стороны клиента не было. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10–#13",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Adrian.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 4,
+          "explanation": "Требовалось соблюдать скорость ответа и управление диалогом. Первая реакция оператора составила 210 секунд (более 3 минут) без предварительного предупреждения, плюс оператор сделал предложение платных услуг вне рамок компании, нарушив логику диалога. Вывод: балл 4.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#1–#14",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Send me your personal number and I'll call you after work.",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось подвести итог/предложить помощь и попрощаться. Оператор закрыл чат (#14) без предложения помощи и без прощания после ответа клиента (#13). Вывод: Нет.",
+          "evidence_ids": [
+            13,
+            14
+          ],
+          "checked_range": "#12–#14",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "No, I'm only asking for help with the app.",
+          "quote_ref": 13,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проверить факт грубых нарушений. Оператор предложил клиенту личную платную консультацию в обход компании (#12). Вывод: Да (выявлено нарушение bypass_offer).",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [
+            "bypass_offer"
+          ],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Send me your personal number and I'll call you after work. I charge for private advice and can tell you which bonds to buy.",
+          "quote_ref": 12,
+          "quote_verified": true
+        }
+      }
+    },
+    {
+      "evaluation_id": 16,
+      "conversation_id": "p1-en-001",
+      "evaluated_at": "2026-11-07T18:49:41+00:00",
+      "parent_evaluation_id": null,
+      "checklist": {
+        "id": 1,
+        "name": "Чек-лист качества чатов (Freedom)",
+        "version": 1
+      },
+      "conversation": {
+        "dataset": "DEV",
+        "channel": "agent chat",
+        "language": "EN",
+        "source_id": "p1-en-001",
+        "sequence": 1,
+        "imported_at": "2026-11-07T16:44:46+00:00",
+        "transcript": "[{\"timestamp\": \"00:00\", \"speaker\": \"client\", \"text\": \"I'm opening a new account and the app says my login is taken.\"}, {\"timestamp\": \"00:02\", \"speaker\": \"bot\", \"text\": \"Hello! I'm AIM, the Freedom Broker AI assistant. I can answer questions about products and services, provide information about your accounts, assets and fees, compare information in a table, share your account manager's contact details, and pass your question to our support team.\"}, {\"timestamp\": \"00:03\", \"speaker\": \"bot\", \"text\": \"By continuing this conversation, you agree to the collection and processing of your personal data and confirm that you have read the company's Privacy Policy.\"}, {\"timestamp\": \"00:08\", \"speaker\": \"bot\", \"text\": \"Did you previously use that login for another account?\"}, {\"timestamp\": \"00:28\", \"speaker\": \"client\", \"text\": \"Yes, I closed that account. Can I talk to a support agent?\"}, {\"timestamp\": \"00:30\", \"speaker\": \"bot\", \"text\": \"Would you like me to connect you with an agent?\"}, {\"timestamp\": \"00:35\", \"speaker\": \"client\", \"text\": \"yes please\"}, {\"timestamp\": \"00:36\", \"speaker\": \"bot\", \"text\": \"Please wait. An agent will join the chat shortly.\"}, {\"timestamp\": \"00:38\", \"speaker\": \"system\", \"text\": \"Chat transferred to an agent.\"}, {\"timestamp\": \"01:15\", \"speaker\": \"operator\", \"text\": \"Hi, I'm Maya from support. A login stays on record after the account is closed. Use a different login for the new registration.\"}, {\"timestamp\": \"01:28\", \"speaker\": \"client\", \"text\": \"Right, I thought I'd just have to wait. Thanks.\"}, {\"timestamp\": \"02:04\", \"speaker\": \"operator\", \"text\": \"You're welcome. Take care!\"}]"
+      },
+      "meta": {
+        "provider": "gemini",
+        "model": "gemini-3.6-flash",
+        "fallback_used": false,
+        "seconds": 8.23,
+        "attempts": 1,
+        "rate_limited": 0,
+        "tokens": {
+          "prompt_tokens": 6616,
+          "completion_tokens": 1275,
+          "total_tokens": 7891
+        },
+        "cost_usd": 0.0,
+        "prompt_version": "cqa-v4",
+        "criteria_prompt_versions": {
+          "c01_contact": "cqa-v4",
+          "c02_needs": "cqa-v4",
+          "c03_ident": "cqa-v4",
+          "c04_consult": "cqa-v4",
+          "c05_empathy": "cqa-v4",
+          "c06_flow": "cqa-v4",
+          "c07_closing": "cqa-v4",
+          "c08_gross": "cqa-v4"
+        },
+        "warnings": [],
+        "evaluated_criteria": [
+          "c01_contact",
+          "c02_needs",
+          "c03_ident",
+          "c04_consult",
+          "c05_empathy",
+          "c06_flow",
+          "c07_closing",
+          "c08_gross"
+        ],
+        "total_seconds": 8.23
+      },
+      "answers": {
+        "c01_contact": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось поздороваться и представиться в первом ответе на языке клиента (EN). Оператор поздоровалась («Hi») и назвала своё имя («I'm Maya from support») в реплике #10. Вывод: Да.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Maya from support.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c02_needs": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось выявить потребность или ответить без лишних уточнений, если информации достаточно. Клиент сразу указал, что старый аккаунт был закрыт (#1, #5), и информации оператору хватило для предоставления ответа без повторных вопросов. Вывод: N/A.",
+          "evidence_ids": [
+            1,
+            5
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Yes, I closed that account.",
+          "quote_ref": 5,
+          "quote_verified": true
+        },
+        "c03_ident": {
+          "status": "ok",
+          "na": true,
+          "value": null,
+          "explanation": "Требовалось проверить, нужна ли идентификация. Запрос клиента касался общей технической механики использования логинов от ранее закрытых аккаунтов при регистрации и не требовал выполнения операций по конкретному действующему счёту или раскрытия персональных данных. Вывод: N/A.",
+          "evidence_ids": [
+            1
+          ],
+          "checked_range": "#1–#10",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "I'm opening a new account and the app says my login is taken.",
+          "quote_ref": 1,
+          "quote_verified": true
+        },
+        "c04_consult": {
+          "status": "ok",
+          "na": false,
+          "value": 20,
+          "explanation": "Требовалось дать точный и полный ответ на вопрос клиента. Оператор корректно объяснила, что логин сохраняется в системе после закрытия аккаунта, и предоставила чёткое решение — использовать другой логин (#10). Вывод: балл 20.",
+          "evidence_ids": [
+            10
+          ],
+          "checked_range": "#10",
+          "flags": [],
+          "needs_review": true,
+          "unverified_claims": [
+            "Логин сохраняется в базе системы после закрытия аккаунта и не может быть использован повторно"
+          ],
+          "quote": "A login stays on record after the account is closed. Use a different login for the new registration.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c05_empathy": {
+          "status": "ok",
+          "na": false,
+          "value": 1,
+          "explanation": "Требовалось проявить вежливость. Клиент не выражал негативных эмоций, оператор общалась вежливо и дружелюбно (#10, #12). Вывод: Да.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c06_flow": {
+          "status": "ok",
+          "na": false,
+          "value": 10,
+          "explanation": "Требовалось вести диалог последовательно, без лишних пауз и путанных формулировок. Задержек нет, ответ оператора понятный, логичный и связный. Вывод: балл 10.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "Hi, I'm Maya from support. A login stays on record after the account is closed. Use a different login for the new registration.",
+          "quote_ref": 10,
+          "quote_verified": true
+        },
+        "c07_closing": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Требовалось предложить дальнейшую помощь и попрощаться. Оператор попрощалась («Take care!»), но не задала завершающий вопрос о наличии других вопросов. Вывод: Нет.",
+          "evidence_ids": [
+            12
+          ],
+          "checked_range": "#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        },
+        "c08_gross": {
+          "status": "ok",
+          "na": false,
+          "value": 0,
+          "explanation": "Грубых нарушений (оскорбления, увод клиента, утечка конфиденциальных данных) в диалоге не обнаружено. Вывод: Нет.",
+          "evidence_ids": [
+            10,
+            12
+          ],
+          "checked_range": "#10–#12",
+          "flags": [],
+          "needs_review": false,
+          "unverified_claims": [],
+          "quote": "You're welcome. Take care!",
+          "quote_ref": 12,
+          "quote_verified": true
+        }
+      }
+    }
+  ]
+}

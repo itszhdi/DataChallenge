@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS ix_analysis_status_state ON analysis_status(state);
 """
 
 JSON_FIELDS = {"transcript", "transcript_asr", "asr_meta", "data", "answers", "meta", "new_answer"}
-# ! Меняется при несовместимом изменении схемы: старую БД нужно пересоздать (make clean-db)
+# ! Увеличивается при несовместимых изменениях; поддерживаемые старые схемы мигрируются при старте.
 SCHEMA_VERSION = 2
 
 
@@ -133,11 +133,48 @@ def init_db() -> None:
     path = get_settings().db_path
     with connect() as conn:
         conn.execute("PRAGMA journal_mode = WAL")
-        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations'").fetchone()
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        exists = "conversations" in tables
         version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version > SCHEMA_VERSION:
+            raise SchemaOutdated(f"{path}: schema v{version} is newer than this app (supports v{SCHEMA_VERSION})")
+
+        # * v0 used source conversation IDs as primary keys and lacked source_id/seq/ASR fields.
+        # Preserve existing IDs so evaluation and appeal foreign keys remain valid.
         if exists and version < SCHEMA_VERSION:
-            logger.error("Database schema v%s is outdated (need v%s), run `make clean-db` and re-import", version, SCHEMA_VERSION)
-            raise SchemaOutdated(f"{path}: schema v{version} < v{SCHEMA_VERSION}, run `make clean-db`")
+            required = {
+                "conversations": {"id", "dataset", "channel", "language", "audio_url", "transcript", "imported_at"},
+                "checklists": {"id", "version", "name", "data", "comment", "is_active", "created_at"},
+                "evaluations": {"id", "conversation_id", "checklist_id", "answers", "meta", "parent_id", "created_at"},
+                "appeals": {"id", "evaluation_id", "criterion_id", "comment", "status", "decision", "new_answer", "reason", "created_at", "resolved_at"},
+            }
+            missing_by_table = {}
+            for table, expected in required.items():
+                if table in tables:
+                    columns = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+                    missing = expected - columns
+                    if missing:
+                        missing_by_table[table] = sorted(missing)
+            if missing_by_table:
+                raise SchemaOutdated(f"{path}: unsupported legacy columns missing: {missing_by_table}; database left unchanged")
+
+            conversation_columns = {r[1] for r in conn.execute("PRAGMA table_info(conversations)").fetchall()}
+            if "source_id" not in conversation_columns:
+                conn.execute("ALTER TABLE conversations ADD COLUMN source_id TEXT NOT NULL DEFAULT ''")
+                conn.execute("UPDATE conversations SET source_id = id WHERE source_id = ''")
+                logger.info("Database migrated: conversations.source_id added")
+            if "seq" not in conversation_columns:
+                conn.execute("ALTER TABLE conversations ADD COLUMN seq INTEGER NOT NULL DEFAULT 0")
+                datasets = [r[0] for r in conn.execute("SELECT DISTINCT dataset FROM conversations ORDER BY dataset").fetchall()]
+                for dataset in datasets:
+                    rows = conn.execute(
+                        "SELECT id FROM conversations WHERE dataset = ? ORDER BY imported_at, id", (dataset,)
+                    ).fetchall()
+                    conn.executemany(
+                        "UPDATE conversations SET seq = ? WHERE id = ?",
+                        [(seq, row[0]) for seq, row in enumerate(rows, start=1)],
+                    )
+                logger.info("Database migrated: conversations.seq added and populated")
         # * Миграция настроек из формата «одна строка JSON» (ветка фронта) в «ключ — значение»
         old_settings: dict[str, Any] = {}
         cols = {r[1] for r in conn.execute("PRAGMA table_info(app_settings)").fetchall()}
@@ -179,14 +216,26 @@ def upsert_conversations(dataset: str, records: list[dict[str, Any]]) -> int:
         for r in records
     ]
     with connect() as conn:
-        conn.executemany(
-            """INSERT INTO conversations (id, source_id, dataset, seq, channel, language, audio_url, transcript, imported_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET seq=excluded.seq, channel=excluded.channel,
-                 language=excluded.language, audio_url=excluded.audio_url,
-                 transcript=excluded.transcript, imported_at=excluded.imported_at""",
-            rows,
-        )
+        for row in rows:
+            key, source_id, row_dataset, seq, channel, language, audio_url, transcript, imported_at = row
+            existing = conn.execute(
+                """SELECT id FROM conversations WHERE id = ? OR (dataset = ? AND source_id = ?)
+                   ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END LIMIT 1""",
+                (key, row_dataset, source_id, key),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE conversations SET source_id = ?, dataset = ?, seq = ?, channel = ?, language = ?,
+                       audio_url = ?, transcript = ?, imported_at = ? WHERE id = ?""",
+                    (source_id, row_dataset, seq, channel, language, audio_url, transcript, imported_at, existing[0]),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO conversations
+                       (id, source_id, dataset, seq, channel, language, audio_url, transcript, imported_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    row,
+                )
     return len(rows)
 
 
@@ -195,8 +244,14 @@ def get_conversation(conversation_id: str) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
         if row is None:
-            rows = conn.execute("SELECT * FROM conversations WHERE source_id = ? LIMIT 2", (conversation_id,)).fetchall()
-            row = rows[0] if len(rows) == 1 else None
+            if ":" in conversation_id:
+                dataset, source_id = conversation_id.split(":", 1)
+                row = conn.execute(
+                    "SELECT * FROM conversations WHERE dataset = ? AND source_id = ?", (dataset, source_id)
+                ).fetchone()
+            else:
+                rows = conn.execute("SELECT * FROM conversations WHERE source_id = ? LIMIT 2", (conversation_id,)).fetchall()
+                row = rows[0] if len(rows) == 1 else None
         return _row(row)
 
 
