@@ -13,6 +13,7 @@ import { useDataset } from '../hooks/useDataset'
 import { useJob } from '../hooks/useJob'
 import { isQueueActive, useQueue } from '../hooks/useQueue'
 import { CHANNEL_LABEL_KEYS, CHANNELS, QUEUE_ACTIVE_POLL_MS } from '../lib/constants'
+import { matchesStatus, STATUS_FILTERS } from '../lib/dialogStatus'
 import { liveStatuses } from '../lib/jobResult'
 
 const ALL = 'all'
@@ -25,14 +26,14 @@ export default function DialogsPage() {
   const conversations = useConversations(dataset, isQueueActive(queue.data) ? QUEUE_ACTIVE_POLL_MS : false)
   const { job, isRunning, start, track } = useJob()
   const [channel, setChannel] = useState(ALL)
-  const [appeals, setAppeals] = useState(ALL)
+  const [status, setStatus] = useState(ALL)
 
   const rows = useMemo(
     () =>
       (conversations.data ?? []).filter(
-        (row) => (channel === ALL || row.channel === channel) && (appeals === ALL || row.open_appeals > 0),
+        (row) => (channel === ALL || row.channel === channel) && (status === ALL || matchesStatus(row, status)),
       ),
-    [conversations.data, channel, appeals],
+    [conversations.data, channel, status],
   )
   const failures = useMemo(() => new Map((job?.failed ?? []).map((item) => [item.conversation_id, item.code])), [job])
   const statuses = useMemo(() => liveStatuses(job), [job])
@@ -73,9 +74,13 @@ export default function DialogsPage() {
               </option>
             ))}
           </Select>
-          <Select aria-label={t('table.appeals')} value={appeals} onChange={(event) => setAppeals(event.target.value)} className="w-full sm:w-auto">
-            <option value={ALL}>{t('dialogs.allAppeals')}</option>
-            <option value="open">{t('dialogs.openAppeals')}</option>
+          <Select aria-label={t('table.status')} value={status} onChange={(event) => setStatus(event.target.value)} className="w-full sm:w-auto">
+            <option value={ALL}>{t('dialogs.allStatuses')}</option>
+            {STATUS_FILTERS.map((value) => (
+              <option key={value} value={value}>
+                {t(`dialogs.statusFilter.${value}`)}
+              </option>
+            ))}
           </Select>
           <span className="ml-auto text-sm text-ink-muted">{t('dialogs.count', { count: rows.length })}</span>
         </div>

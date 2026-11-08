@@ -89,13 +89,21 @@
     "empty": "Импортируйте набор диалогов кнопкой «Импорт».",
     "nothingFound": "Нет диалогов с такими фильтрами",
     "allFormats": "Все форматы",
-    "allAppeals": "Все диалоги",
-    "openAppeals": "С открытой апелляцией",
     "count_one": "{{count}} диалог",
     "count_few": "{{count}} диалога",
     "count_many": "{{count}} диалогов",
     "count_other": "{{count}} диалога",
-    "retry": "Повторить"
+    "retry": "Повторить",
+    "allStatuses": "Все статусы",
+    "statusFilter": {
+      "gross": "Грубая ошибка",
+      "appeal": "На апелляции",
+      "evaluated": "Оценён без грубых ошибок",
+      "preliminary": "Предварительная оценка",
+      "notEvaluated": "Не оценён",
+      "inProgress": "В очереди / идёт анализ",
+      "failed": "Ошибка / пропущен"
+    }
   },
   "import": {
     "title": "Импорт диалогов",

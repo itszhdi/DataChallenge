@@ -5,6 +5,7 @@ import { LuPlay } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useFormat } from '../../hooks/useFormat'
 import { PAGE_SIZE } from '../../lib/constants'
+import { statusRank } from '../../lib/dialogStatus'
 import { formatClock, scoreTone } from '../../lib/format'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
@@ -75,7 +76,9 @@ export default function DialogsTable({ rows, statuses, failures, upcoming, isBus
       },
       {
         id: 'status',
-        enableSorting: false,
+        accessorFn: statusRank,
+        // Первый клик — по важности: грубые ошибки и сбои сверху
+        sortDescFirst: false,
         header: t('table.status'),
         cell: ({ row }) => <DialogStatus row={row.original} statuses={statuses} failures={failures} upcoming={upcoming} />,
       },

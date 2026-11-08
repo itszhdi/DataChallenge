@@ -89,11 +89,19 @@
     "empty": "Import a dataset with the Import button.",
     "nothingFound": "No dialogs match these filters",
     "allFormats": "All formats",
-    "allAppeals": "All dialogs",
-    "openAppeals": "With an open appeal",
     "count_one": "{{count}} dialog",
     "count_other": "{{count}} dialogs",
-    "retry": "Retry"
+    "retry": "Retry",
+    "allStatuses": "All statuses",
+    "statusFilter": {
+      "gross": "Gross error",
+      "appeal": "Under appeal",
+      "evaluated": "Evaluated, no gross errors",
+      "preliminary": "Preliminary score",
+      "notEvaluated": "Not evaluated",
+      "inProgress": "Queued / analyzing",
+      "failed": "Failed / skipped"
+    }
   },
   "import": {
     "title": "Import dialogs",
