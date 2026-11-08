@@ -32,7 +32,8 @@ cp .env.example .env         # вписать DATASET_API_URL и LLM_API_KEY
 make run                     # http://localhost:8000/api/health
 make import-dev              # импорт DEV из API организаторов
 make eval ID=DEV:p1-ru-001   # оценить один диалог
-make golden                  # сверить модель с tests/golden.csv
+make golden                  # сверить модель с tests/golden.csv (STORED=1 — по сохранённым оценкам)
+make stats DATASET=DEV       # время, токены и стоимость оценок
 make test                    # автотесты
 make docker-up               # то же в Docker (SQLite в volume, results/ примонтирована)
 ```
@@ -205,6 +206,8 @@ make models && make use-local
 `make golden` оценивает диалоги из `tests/golden.csv` активным чек-листом и сравнивает ответы модели с эталоном по каждому критерию. Перед запуском импортируйте датасет, содержащий эти ID (`make import-dev` для DEV). Команда печатает точность по критериям, общий процент и объяснения модели для несовпадений; код завершения `1` означает, что найдены расхождения. Разметка с доказательствами и заметками хранится отдельно в `tests/golden_notes.csv`.
 
 Для другого файла: `make golden FILE=tests/my_golden.csv`. Быстрая сверка на части эталона и выбор модели: `make golden LIMIT=2 PROFILE=gemini` (по умолчанию профиль из настроек).
+
+`make golden STORED=1` сверяет эталон не с новыми ответами модели, а с последними сохранёнными оценками. Модель не вызывается, а точность считается по тем же оценкам, что уходят в экспорт. `make stats DATASET=DEV` показывает по каждому профилю и модели число оценок, среднее время, средние токены и стоимость (по `LLM_PRICES`).
 
 ## Формат критерия
 

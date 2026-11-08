@@ -1,4 +1,4 @@
-.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-luna use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs pause resume stop stop-auto
+.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-luna use-local auto-on auto-off worker save-results transcribe analytics golden stats clean-db docker-build docker-up docker-down docker-logs pause resume stop stop-auto
 
 PORT ?= 8000
 
@@ -34,7 +34,11 @@ analytics:
 	@curl -s "localhost:$(PORT)/api/analytics?dataset=$(DATASET)"
 
 golden:
-	@uv run python -m src.cli golden $(or $(FILE),tests/golden.csv) $(if $(PROFILE),--profile $(PROFILE)) $(if $(LIMIT),--limit $(LIMIT))
+	@uv run python -m src.cli golden $(or $(FILE),tests/golden.csv) $(if $(PROFILE),--profile $(PROFILE)) $(if $(LIMIT),--limit $(LIMIT)) $(if $(STORED),--stored)
+
+# * Время, токены и стоимость последних оценок: make stats DATASET=DEV
+stats:
+	@uv run python -m src.cli stats $(if $(DATASET),--dataset $(DATASET))
 
 docker-build:
 	docker compose build
