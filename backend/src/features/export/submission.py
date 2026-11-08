@@ -191,5 +191,8 @@ def save_submission(submission: dict[str, Any], target: Target) -> Path:
     path = submission_path(target)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(submission, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # ** В Docker файл создаётся от root: открываем его на запись, чтобы пользователь мог править и удалять файл на хосте
+    path.parent.chmod(0o777)
+    path.chmod(0o666)
     logger.info("Submission saved: %s (%d results)", path, len(submission["results"]))
     return path
