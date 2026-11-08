@@ -38,9 +38,10 @@ export default function SegmentsChart({ byLanguage, byChannel, filter, onFilter 
   const hasSelection = filter?.type === 'language' || filter?.type === 'channel'
 
   return (
-    <Card className="pb-3">
+    <Card className="flex h-full flex-col pb-3">
       <CardHeader title={t('overview.segmentsTitle')} hint={t('overview.segmentsHint')} />
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+      <div className="min-h-0 flex-1" style={{ minHeight: CHART_HEIGHT }}>
+        <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ left: 12, right: 12, top: 20, bottom: 0 }}>
           <XAxis dataKey="label" height={X_AXIS_HEIGHT} tick={<TwoLineTick fontSize={isNarrow ? 10 : 12} />} tickLine={false} axisLine={false} interval={0} />
           <YAxis domain={[0, 100]} hide />
@@ -69,7 +70,8 @@ export default function SegmentsChart({ byLanguage, byChannel, filter, onFilter 
             />
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </div>
     </Card>
   )
 }

@@ -211,7 +211,7 @@
     "fatalValue_one": "{{count}} dialog · {{percent}}",
     "fatalValue_other": "{{count}} dialogs · {{percent}}",
     "fatalHint": "Insults, bypassing the company, data leaks",
-    "bottleneck": "Bottleneck",
+    "bottleneck": "Main problem",
     "appeals": "Appeals",
     "appealsValue": "{{filed}} filed · {{changed}} changed",
     "appealsHint": "{{percent}} overturned · open: {{open}}",

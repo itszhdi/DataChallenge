@@ -217,7 +217,7 @@
     "fatalValue_many": "{{count}} диалогов · {{percent}}",
     "fatalValue_other": "{{count}} диалога · {{percent}}",
     "fatalHint": "Оскорбления, обход компании, утечки",
-    "bottleneck": "Узкое горлышко",
+    "bottleneck": "Главная проблема",
     "appeals": "Апелляции",
     "appealsValue": "{{filed}} подано · {{changed}} изменено",
     "appealsHint": "{{percent}} пересмотров · открыто: {{open}}",

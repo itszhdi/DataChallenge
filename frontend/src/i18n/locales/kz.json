@@ -211,7 +211,7 @@
     "fatalValue_one": "{{count}} диалог · {{percent}}",
     "fatalValue_other": "{{count}} диалог · {{percent}}",
     "fatalHint": "Қорлау, компанияны айналып өту, ақпарат таралуы",
-    "bottleneck": "Әлсіз тұсы",
+    "bottleneck": "Басты мәселе",
     "appeals": "Апелляциялар",
     "appealsValue": "{{filed}} берілді · {{changed}} өзгертілді",
     "appealsHint": "{{percent}} қайта қаралды · ашық: {{open}}",

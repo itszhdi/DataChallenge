@@ -20,9 +20,10 @@ export default function CriteriaChart({ criteria, filter, onFilter }) {
   const selected = filter?.type === 'criterion' ? filter.value : null
 
   return (
-    <Card className="pb-3">
+    <Card className="flex h-full flex-col pb-3">
       <CardHeader title={t('overview.criteriaTitle')} hint={t('overview.criteriaHint')} />
-      <ResponsiveContainer width="100%" height={rows.length * ROW_HEIGHT + 24}>
+      <div className="min-h-0 flex-1" style={{ minHeight: rows.length * ROW_HEIGHT + 24 }}>
+        <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} layout="vertical" margin={{ left: isNarrow ? 8 : 16, right: 48, top: 0, bottom: 0 }}>
           <XAxis type="number" domain={[0, 100]} hide />
           <YAxis
@@ -56,7 +57,8 @@ export default function CriteriaChart({ criteria, filter, onFilter }) {
             />
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </div>
     </Card>
   )
 }

@@ -16,9 +16,10 @@ export default function DistributionChart({ distribution, filter, onFilter }) {
   const selected = filter?.type === 'bucket' ? filter.value : null
 
   return (
-    <Card className="pb-3">
+    <Card className="flex h-full flex-col pb-3">
       <CardHeader title={t('overview.distributionTitle')} hint={t('overview.distributionHint')} />
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+      <div className="min-h-0 flex-1" style={{ minHeight: CHART_HEIGHT }}>
+        <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ left: 12, right: 12, top: 20, bottom: 0 }}>
           <XAxis dataKey="label" height={X_AXIS_HEIGHT} tick={<TwoLineTick fontSize={isNarrow ? 10 : 12} />} tickLine={false} axisLine={false} interval={0} />
           <YAxis allowDecimals={false} hide />
@@ -38,7 +39,8 @@ export default function DistributionChart({ distribution, filter, onFilter }) {
             <LabelList dataKey="count" position="top" style={{ fill: 'var(--ink)', fontSize: 12, fontWeight: 600 }} />
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </div>
     </Card>
   )
 }

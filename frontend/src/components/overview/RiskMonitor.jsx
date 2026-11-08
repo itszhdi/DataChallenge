@@ -26,9 +26,9 @@ export default function RiskMonitor({ dialogs, filter, onFilter }) {
   const label = (type) => (type === UNKNOWN_TYPE ? t('detail.grossUnknownType') : t(`gross.${type}`, { defaultValue: type }))
 
   return (
-    <Card className="pb-3">
+    <Card className="flex h-full flex-col pb-3">
       <CardHeader title={t('overview.riskTitle')} hint={t('overview.riskHint')} />
-      <ul className="space-y-1 px-3">
+      <ul className="flex flex-1 flex-col justify-center gap-1 px-3">
         {rows.map(({ type, count }) => {
           const active = filter?.type === 'grossType' && filter.value === type
           const Icon = count ? LuShieldAlert : LuShieldCheck

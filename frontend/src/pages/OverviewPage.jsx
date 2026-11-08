@@ -44,13 +44,12 @@ export default function OverviewPage() {
     return (
       <div className="space-y-5">
         <KpiCards data={data} filter={filter} onFilter={toggleFilter} />
-        <div className="grid items-start gap-5 xl:grid-cols-2">
+        {/* Два ряда по две карточки одной высоты: графики растягиваются, пустот под короткими блоками нет */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <CriteriaChart criteria={data.criteria_averages} filter={filter} onFilter={toggleFilter} />
-          <div className="space-y-5">
-            <SegmentsChart byLanguage={data.by_language} byChannel={data.by_channel} filter={filter} onFilter={toggleFilter} />
-            <DistributionChart distribution={data.distribution} filter={filter} onFilter={toggleFilter} />
-            <RiskMonitor dialogs={data.dialogs} filter={filter} onFilter={toggleFilter} />
-          </div>
+          <SegmentsChart byLanguage={data.by_language} byChannel={data.by_channel} filter={filter} onFilter={toggleFilter} />
+          <DistributionChart distribution={data.distribution} filter={filter} onFilter={toggleFilter} />
+          <RiskMonitor dialogs={data.dialogs} filter={filter} onFilter={toggleFilter} />
         </div>
         <DrilldownTable ref={tableRef} data={data} filter={filter} onReset={() => setFilter(null)} />
       </div>
