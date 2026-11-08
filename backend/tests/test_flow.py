@@ -1,5 +1,6 @@
 # * Сквозной сценарий защиты без сети: модель подменена, проверяем что LLM зовётся только когда нужно
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
@@ -383,3 +384,26 @@ async def test_call_transcribed_from_audio(client, monkeypatch):
     await client.patch("/api/settings", json={"call_transcript": "original"})
     card = (await client.post("/api/evaluate", json={"conversation_id": "s-en-003"})).json()
     assert card["conversation"]["transcript_source"] == "original" and "transcript" not in card["meta"]
+
+
+async def test_submission_format(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(get_settings(), "results_dir", tmp_path / "results")
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+    await client.post("/api/evaluate", json={"conversation_id": "s-ru-001"})
+
+    body = (await client.get("/api/export/submission", params={"dataset": "SAMPLE", "target": "dev"})).json()
+    sub, check = body["submission"], body["check"]
+    assert sub["schema_version"] == "1.0" and set(sub) == {"schema_version", "team_name", "model", "results"}
+    assert check["errors"] == [] and check["counts"] == {"ok": 1, "error": 2}
+    ok = next(r for r in sub["results"] if r["status"] == "ok")
+    assert ok["conversation_id"] == "s-ru-001" and set(ok) == {"conversation_id", "status", "criteria", "score"}
+    assert [c["criterion_id"] for c in ok["criteria"]] == [
+        "contact", "discovery", "identification", "consultation", "empathy", "dialogue", "closure", "critical"]
+    assert ok["score"]["critical_flag"] is ok["criteria"][-1]["value"]
+    error = next(r for r in sub["results"] if r["status"] == "error")
+    assert error["criteria"] == [] and error["score"] is None and error["error"]
+
+    saved = (await client.post("/api/export/submission/save", params={"dataset": "SAMPLE", "target": "dev", "team_name": "T"})).json()
+    path = tmp_path / "results" / "dev" / "results.json"
+    assert saved["path"] == str(path) and json.loads(path.read_text(encoding="utf-8"))["team_name"] == "T"
+    assert (await client.post("/api/export/submission/save", params={"dataset": "SAMPLE", "target": "../x"})).status_code == 422
