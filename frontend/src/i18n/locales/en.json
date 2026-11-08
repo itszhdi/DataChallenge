@@ -501,5 +501,13 @@
       "error": "Auto-check error — {{error}}",
       "active": "Auto-check is running"
     }
+  },
+  "routeError": {
+    "title": "The page could not be opened",
+    "text": "Try refreshing the page. If the error repeats, show the details to a specialist.",
+    "newVersionTitle": "A new version of the app is available",
+    "newVersionText": "This tab is running an old version. Refresh the page to load the new one.",
+    "reload": "Refresh page",
+    "home": "Go to overview"
   }
 }

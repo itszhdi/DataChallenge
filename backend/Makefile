@@ -1,4 +1,4 @@
-.PHONY: install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs
+.PHONY: submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs
 
 PORT ?= 8000
 
@@ -22,6 +22,10 @@ eval:
 
 batch:
 	@curl -s -X POST localhost:$(PORT)/api/evaluate/batch -H 'Content-Type: application/json' -d '{"dataset":"$(or $(DATASET),DEV)","mode":"$(or $(MODE),evaluate)","only_missing":$(or $(ONLY_MISSING),false)}'
+
+# * Файл для сдачи организаторам: make submit DATASET=DEV TARGET=dev TEAM="Команда"
+submit:
+	@curl -s -X POST -G localhost:$(PORT)/api/export/submission/save --data-urlencode "dataset=$(or $(DATASET),DEV)" --data-urlencode "target=$(or $(TARGET),dev)" --data-urlencode "team_name=$(TEAM)" | python3 -m json.tool
 
 job:
 	@curl -s localhost:$(PORT)/api/jobs/$(JOB)
