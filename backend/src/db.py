@@ -505,6 +505,25 @@ def finish_status(conversation_id: str, state: str, error: str | None = None) ->
         )
 
 
+def requeue_status(conversation_id: str) -> None:
+    # * Прерванный паузой диалог снова ждёт в очереди; попытка не считается
+    with connect() as conn:
+        conn.execute(
+            "UPDATE analysis_status SET state = 'queued', attempts = MAX(attempts - 1, 0), started_at = NULL "
+            "WHERE conversation_id = ?",
+            (conversation_id,),
+        )
+
+
+def clear_statuses(conversation_ids: list[str]) -> None:
+    # * Остановленные диалоги возвращаются к прежнему виду: последняя оценка или «не оценён»
+    with connect() as conn:
+        conn.executemany(
+            "DELETE FROM analysis_status WHERE conversation_id = ? AND state IN ('queued', 'running')",
+            [(cid,) for cid in conversation_ids],
+        )
+
+
 def reset_stale_statuses() -> int:
     # ! После рестарта задачи в памяти потеряны: всё, что было в работе, помечаем упавшим, чтобы можно было повторить
     with connect() as conn:

@@ -140,9 +140,21 @@
       "details": "Details for a specialist",
       "view": "View result",
       "retry": "Try again",
-      "retryFailed": "Retry failed ones"
+      "retryFailed": "Retry failed ones",
+      "stopped": {
+        "title": "Evaluation stopped",
+        "text": "Evaluated: {{done}}. Not evaluated: {{cancelled}}. Finished evaluations are kept."
+      },
+      "continue": "Evaluate the rest ({{count}})"
     },
-    "alreadyRunning": "An evaluation is already running — showing its progress"
+    "alreadyRunning": "An evaluation is already running — showing its progress",
+    "paused": "paused",
+    "pausedHint": "Paused: the current dialog was interrupted and will be first in the queue. Finished evaluations are kept.",
+    "stopping": "Stopping: interrupting the current dialog…",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "controlFailed": "Could not change the evaluation state"
   },
   "detail": {
     "back": "Back to dialogs",
@@ -375,6 +387,7 @@
       "hint": "Switching applies immediately, no server restart",
       "profile": "Active model",
       "profile_gemini": "Gemini (cloud)",
+      "profile_luna": "GPT-6 Luna (OpenAI)",
       "profile_local": "Local (Ollama / LM Studio)",
       "callTranscript": "Call transcript",
       "callTranscriptHint": "Which text calls are evaluated on",
@@ -500,7 +513,9 @@
       "idle": "Auto-check: no new dialogs",
       "error": "Auto-check error — {{error}}",
       "active": "Auto-check is running"
-    }
+    },
+    "stopAuto": "Stop auto-check",
+    "stopped": "Auto-check stopped"
   },
   "routeError": {
     "title": "The page could not be opened",

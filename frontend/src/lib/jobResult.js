@@ -10,16 +10,17 @@ export function summarizeJob(job) {
   const done = job.done.length
   const failed = job.failed.length
   let outcome = 'empty'
-  if (failed) outcome = done ? 'partial' : 'failed'
+  if (job.stopped) outcome = 'stopped'
+  else if (failed) outcome = done ? 'partial' : 'failed'
   else if (done) outcome = 'success'
-  return { outcome, done, failed, failedGroups: groupByCode(job.failed), skippedGroups: groupByCode(job.skipped) }
+  return { outcome, done, failed, cancelled: job.cancelled?.length ?? 0, failedGroups: groupByCode(job.failed), skippedGroups: groupByCode(job.skipped) }
 }
 
 export const startErrorCode = (error) => error.code ?? STATUS_BY_API_ERROR[error.status] ?? 'internal'
 
-// Статус диалога в идущей задаче: id → analyzing | queued
+// Статус диалога в идущей или поставленной на паузу задаче: id → analyzing | queued
 export function liveStatuses(job) {
-  if (job?.status !== 'running') return new Map()
+  if (!job || job.status === 'finished') return new Map()
   const finished = new Set([...job.done, ...job.failed, ...job.skipped].map((item) => item.conversation_id))
   return new Map(
     job.conversation_ids

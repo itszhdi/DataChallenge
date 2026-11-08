@@ -9,7 +9,9 @@ from src import db
 from src.config.settings import get_settings
 from src.features.evaluation import jobs
 from src.features.evaluation.service import SKIP_ERRORS, evaluate_conversation, tracked
+from src.features.settings.schemas import SettingsPatch
 from src.features.settings.service import load_app_settings as load_settings
+from src.features.settings.service import update as update_settings
 from src.features.worker import state
 from src.llm.client import LLMRegistry
 
@@ -46,9 +48,17 @@ async def step(registry: LLMRegistry) -> None:
     cid = candidate["id"]
     state.update(mode="auto", status="running", reason="", current=cid)
     logger.info("Auto worker: evaluating %s (sort=%s, model=%s)", cid, settings.queue_sort, llm.model)
+    task = asyncio.create_task(tracked(llm, cid, evaluate_conversation, "auto"))
+    state.task = task
     try:
-        await tracked(llm, cid, evaluate_conversation, "auto")
+        await task
         state.state["processed"] += 1
+    except asyncio.CancelledError:
+        # ! Отменили сам воркер (остановка сервера) — пробрасываем; иначе это стоп пользователем
+        if not task.cancelled() or asyncio.current_task().cancelling():
+            raise
+        await asyncio.to_thread(db.clear_statuses, [cid])
+        logger.info("Auto worker: %s interrupted by user", cid)
     except SKIP_ERRORS as e:
         logger.info("Auto worker: %s skipped: %s", cid, getattr(e, "detail", e))
     except HTTPException as e:
@@ -57,6 +67,7 @@ async def step(registry: LLMRegistry) -> None:
         state.update(last_error=f"{cid}: {e.detail}")
         logger.warning("Auto worker: %s failed: %s", cid, e.detail)
     finally:
+        state.task = None
         state.update(current=None)
 
 
@@ -74,3 +85,14 @@ async def run(registry: LLMRegistry) -> None:
     finally:
         state.update(alive=False, current=None)
         logger.info("Auto worker stopped")
+
+
+async def stop() -> bool:
+    # * Выключает авторежим и прерывает текущий диалог; возвращает, был ли диалог в работе
+    await asyncio.to_thread(update_settings, SettingsPatch(auto_mode=False))
+    state.update(mode="manual", status="idle", reason="остановлено пользователем")
+    task = state.task
+    if task and not task.done():
+        task.cancel()
+        return True
+    return False

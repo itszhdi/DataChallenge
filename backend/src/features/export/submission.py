@@ -39,6 +39,13 @@ ALLOWED_VALUES: dict[str, tuple[Any, ...]] = {
 }
 SCALE_CODES = {"consultation", "dialogue"}
 MODE_BY_PROVIDER = {"gemini": "external_api", "openai": "local"}
+# ** Luna тоже ходит через openai-совместимый клиент, поэтому облако от локальной модели отличаем по профилю
+MODE_BY_PROFILE = {"gemini": "external_api", "luna": "external_api", "local": "local"}
+
+
+def _mode(meta: dict[str, Any]) -> str:
+    # * Старые оценки без profile и запасная модель (profile=fallback) — по провайдеру
+    return MODE_BY_PROFILE.get(meta.get("profile")) or MODE_BY_PROVIDER.get(meta.get("provider"), "external_api")
 
 
 def _value_allowed(code: str, value: Any) -> bool:
@@ -89,9 +96,9 @@ def _unevaluated_reason(conv: dict[str, Any]) -> str:
 
 def _model(evaluations: list[dict[str, Any]], fallback: str) -> dict[str, str]:
     # * Режим и имя — по фактически использованным моделям, а не по текущей настройке
-    providers = {(e["meta"] or {}).get("provider") for e in evaluations} - {None}
-    names = sorted({(e["meta"] or {}).get("model") for e in evaluations} - {None})
-    modes = {MODE_BY_PROVIDER.get(p, "external_api") for p in providers}
+    metas = [e["meta"] or {} for e in evaluations]
+    names = sorted({m.get("model") for m in metas} - {None})
+    modes = {_mode(m) for m in metas if m.get("provider") or m.get("profile")}
     mode = modes.pop() if len(modes) == 1 else ("hybrid" if modes else "external_api")
     return {"mode": mode, "name": ", ".join(names) or fallback}
 

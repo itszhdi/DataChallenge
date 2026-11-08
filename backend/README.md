@@ -43,12 +43,15 @@ Swagger отключён намеренно. Запуск фронтенда о�
 
 ## Модели
 
-Есть два профиля, переключаются на лету без рестарта: `make use-gemini` / `make use-local` или `PATCH /api/settings {"llm_profile": ...}`. Выбор хранится в БД. В каждой оценке записано, каким профилем и моделью она сделана. `make models` проверяет доступность обоих профилей.
+Есть три профиля, переключаются на лету без рестарта: `make use-gemini` / `make use-luna` / `make use-local` или `PATCH /api/settings {"llm_profile": ...}`. Выбор хранится в БД. В каждой оценке записано, каким профилем и моделью она сделана. `make models` проверяет доступность всех профилей.
 
 | Профиль | Что это | Настройки |
 |---|---|---|
 | `gemini` | Gemini через OpenAI-совместимый endpoint (или любой другой провайдер в `LLM_*`) | `LLM_API_KEY`, `LLM_MODEL`, `LLM_REASONING_EFFORT=low`, `LLM_MIN_INTERVAL_SEC=7` |
+| `luna` | GPT-6 Luna через OpenAI API | `LUNA_API_KEY`, `LUNA_MODEL=gpt-6-luna`, `LUNA_REASONING_EFFORT=low`, `LUNA_CONCURRENCY=3` |
 | `local` | LM Studio на `localhost:1234` | `LOCAL_LLM_MODEL`, `LOCAL_LLM_REASONING_EFFORT=none`, `LOCAL_LLM_MAX_TOKENS=3000` |
+
+**GPT-6 Luna.** Это рассуждающая модель OpenAI, поэтому `temperature` ей не отправляется (у `gemini` и `local` остаётся 0). Схема ответа уходит в строгом режиме `json_schema` без изменений. В файле для сдачи оценки Luna помечаются как `external_api`: режим определяется по профилю, а не по провайдеру, ведь у LM Studio провайдер тоже `openai`. Если API отклонит `reasoning_effort`, поменяйте `LUNA_REASONING_EFFORT` в `.env`. Цены для подсчёта стоимости задаются в `LLM_PRICES` по имени модели.
 
 **Лимиты Gemini free.** 20 запросов **в день** на каждую модель (у каждой модели своя квота) и несколько в минуту. Чат — 1 запрос, звонок — 2 (распознавание + оценка). Минутные 429 бэкенд пережидает паузами 15/30/45… с. Дневной лимит сразу возвращает ошибку «Дневная квота … исчерпана», текст ответа Google пишется в лог. Обойти лимит можно так: сменить `LLM_MODEL` на другую модель (например, `gemini-3.7-flash`), переключиться на `local` или подключить платный тариф.
 
@@ -77,6 +80,11 @@ make models && make use-local
   - Упавшие и пропущенные диалоги воркер **не повторяет**: только ручной Retry.
   - ** Устаревшие оценки (после смены чек-листа) воркер тоже не трогает: в MVP они переоцениваются вручную (`make batch MODE=reapply` или кнопка «Применить к диалогам»). Это экономит запросы к модели и упрощает тесты.
 
+**Пауза и остановка.** Идущий пакет можно поставить на паузу, продолжить или остановить: кнопки в баннере прогресса или `make pause` / `make resume` / `make stop` (`JOB=<id>`, по умолчанию текущий).
+- Пауза сразу прерывает запрос к модели (HTTP-соединение закрывается, LM Studio прекращает генерацию). Прерванный диалог возвращается в начало очереди, попытка не считается. Пока пакет на паузе, новый пакет и авто-воркер не запускаются.
+- Остановка прерывает текущие диалоги и снимает оставшиеся из очереди. Готовые оценки сохраняются, у снятых диалогов остаётся прежняя оценка (или «не оценён»). Задача завершается с `stopped: true` и списком `cancelled`.
+- `make stop-auto` (`POST /worker/stop`, кнопка «Остановить автопроверку») выключает авторежим и прерывает диалог, который воркер анализирует.
+
 **Статусы.** У каждого диалога есть статус `queued | running | done | failed | skipped` с источником (`manual | batch | auto`), текстом ошибки и числом попыток. Статусы хранятся в БД, поэтому видны после перезагрузки страницы. Если сервер упал посреди анализа, при старте такие диалоги получают `failed` «сервер перезапущен». `make queue` показывает, что в работе, что в очереди и что упало, с ETA по каждому диалогу и общим. ETA считается по средней длительности последних 20 оценок текущей модели. `make retry-failed` повторяет только упавшие.
 
 **Неоцениваемые диалоги.** Пустой транскрипт или диалог без реплик оператора в модель не отправляются: одиночная оценка отвечает 422, в пакете и воркере диалог получает `skipped`.
@@ -95,6 +103,8 @@ make models && make use-local
   Всё это перечисляется в `warnings` ответа импорта.
 
 ## Звонки: своё распознавание (Gemini)
+
+**Распознавание выключено по умолчанию** (`TRANSCRIBE_ENABLED=false`): звонки оцениваются по транскрипту из датасета, запись в модель не отправляется, а выбор транскрипта скрыт в интерфейсе. Звонок без текста в датасете пропускается как неоцениваемый, `make transcribe` и `POST /conversations/{id}/transcribe` отвечают 409. Ниже описано поведение при `TRANSCRIBE_ENABLED=true`.
 
 Транскрипт звонков в DEV сделан с ошибками, поэтому звонок можно оценивать по своему распознаванию. Настройка `call_transcript`: `asr` (по умолчанию) или `original`. Если у записи в датасете нет транскрипта, используется распознанный при любой настройке.
 
@@ -120,9 +130,10 @@ make models && make use-local
 | `LLM_CHAT_MODEL`, `LLM_CALL_MODEL` | Отдельные модели для чатов и звонков в профиле `gemini` (пусто — `LLM_MODEL`) |
 | `LLM_REASONING_EFFORT`, `LLM_MIN_INTERVAL_SEC`, `LLM_CONCURRENCY`, `LLM_RETRIES` | Reasoning, пауза между запросами, параллелизм, повторы при битом JSON или ошибке сети |
 | `LLM_FALLBACK_PROVIDER`, `LLM_FALLBACK_MODEL`, `LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_API_KEY`, `LLM_FALLBACK_REASONING_EFFORT` | Запасная модель: включается автоматически при исчерпании дневной квоты или повторов 429 у `gemini` |
+| `LUNA_API_KEY`, `LUNA_MODEL`, `LUNA_BASE_URL`, `LUNA_REASONING_EFFORT`, `LUNA_CONCURRENCY`, `LUNA_TIMEOUT_SEC` | Профиль `luna` (OpenAI) |
 | `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL`, `LOCAL_LLM_REASONING_EFFORT`, `LOCAL_LLM_MAX_TOKENS`, `LOCAL_LLM_TIMEOUT_SEC` | Профиль `local` (LM Studio) |
-| `DEFAULT_LLM_PROFILE` | Профиль при первом запуске (дальше хранится в БД) |
-| `TRANSCRIBE_MODEL`, `TRANSCRIBE_REASONING_EFFORT`, `TRANSCRIBE_TIMEOUT_SEC`, `TRANSCRIBE_MAX_AUDIO_MB` | Распознавание звонков (ключ из `LLM_API_KEY`) |
+| `DEFAULT_LLM_PROFILE` | Профиль при первом запуске: `gemini`, `luna` или `local` (дальше хранится в БД) |
+| `TRANSCRIBE_ENABLED`, `TRANSCRIBE_MODEL`, `TRANSCRIBE_REASONING_EFFORT`, `TRANSCRIBE_TIMEOUT_SEC`, `TRANSCRIBE_MAX_AUDIO_MB` | Распознавание звонков (ключ из `LLM_API_KEY`) |
 | `EXCLUDE_CHANNELS` | Каналы, которые не отправляются в модель. По умолчанию `[]`: данные банка разрешено использовать |
 | `WORKER_INTERVAL_SEC` | Пауза между шагами авто-воркера (5 с) |
 | `CQA_TARGET_SCORE` | Целевой индекс качества на дашборде, по умолчанию 85 |
@@ -137,8 +148,9 @@ make models && make use-local
 | `import-dev`, `upload FILE= DATASET=` | Импорт DEV / файла |
 | `eval ID=`, `batch DATASET= MODE= ONLY_MISSING=`, `retry-failed` | Одиночная, пакетная оценка, повтор упавших |
 | `job JOB=`, `jobs`, `queue DATASET=`, `worker` | Прогресс задачи, список задач, очередь с ETA, состояние воркера |
-| `auto-on SORT= CALLS=`, `auto-off` | Авторежим |
-| `settings`, `models`, `use-gemini`, `use-local` | Настройки, проверка моделей, переключение профиля |
+| `auto-on SORT= CALLS=`, `auto-off`, `stop-auto` | Авторежим; `stop-auto` ещё и прерывает текущий диалог |
+| `pause`, `resume`, `stop` (`JOB=`) | Пауза, продолжение и остановка пакета |
+| `settings`, `models`, `use-gemini`, `use-luna`, `use-local` | Настройки, проверка моделей, переключение профиля |
 | `transcribe ID=` | Распознать запись звонка заново |
 | `save-results DATASET= TEAM=` | Отчёт в `results/` |
 | `analytics` | Сводка |
@@ -152,6 +164,7 @@ make models && make use-local
 | GET / PUT / PATCH | `/settings` | `queue_sort`, `only_missing`, `include_errors`, `concurrency`, `request_delay_ms`, `auto_evaluate_on_import`, `default_group_id`, `auto_mode`, `auto_calls`, `auto_dataset`, `llm_profile`, `call_transcript` + описание профилей |
 | GET | `/settings/models` | Доступность профилей (ключ Gemini, запущен ли LM Studio, загружена ли модель) |
 | GET | `/worker` | Состояние авто-воркера |
+| POST | `/worker/stop` | Выключить авторежим и прервать текущий диалог |
 | GET | `/datasets` | Загруженные наборы |
 | POST | `/datasets/import` `{"group_id":"DEV"}` или `{"url":"https://..."}` | Импорт из API организаторов |
 | POST | `/datasets/upload?dataset=` (multipart `file`) | Импорт из JSON-файла |
@@ -165,6 +178,7 @@ make models && make use-local
 | POST | `/evaluate` `{"conversation_id":"..."}` | Оценить диалог, вернуть карточку (422 — оценивать нечего) |
 | POST | `/evaluate/batch` `{"dataset","conversation_ids","mode":"evaluate"\|"reapply","only_missing","only_failed"}` | Пакет в фоне в порядке `queue_sort`; одновременно идёт одна задача (иначе 409); при недоступной модели пакет останавливается |
 | GET | `/jobs?active=`, `/jobs/{id}` | Задачи пакетной оценки (`current` — диалоги в работе) |
+| POST | `/jobs/{id}/pause`, `/resume`, `/stop` | Пауза, продолжение, остановка пакета (`id` = `current` — текущий) |
 | GET | `/queue?dataset=` | Очередь: running / queued / upcoming (авто) / failed, ETA, состояние воркера |
 | GET | `/evaluations/{id}` | Карточка: `original`, `final`, `operator_summary`, `meta` (версия промпта), `appeals`, `conversation` (транскрипт, по которому оценивала модель) |
 | POST | `/evaluations/{id}/reapply` | Применить активный чек-лист (модель только по изменённым критериям) |

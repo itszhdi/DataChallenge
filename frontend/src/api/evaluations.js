@@ -11,3 +11,10 @@ export const fetchJob = (id) => request(`/jobs/${id}`)
 export const fetchActiveJobs = () => request('/jobs', { params: { active: true } })
 
 export const fetchEvaluation = (id) => request(`/evaluations/${id}`)
+
+// Управление идущим пакетом: пауза прерывает текущий диалог и держит очередь, остановка снимает оставшиеся
+export const pauseJob = (id) => request(`/jobs/${id}/pause`, { method: 'POST' })
+
+export const resumeJob = (id) => request(`/jobs/${id}/resume`, { method: 'POST' })
+
+export const stopJob = (id) => request(`/jobs/${id}/stop`, { method: 'POST' })

@@ -91,3 +91,27 @@ def test_asr_alignment_record_start_pause_and_pre_recording():
     assert out[1]["pre_recording"] and out[3]["timestamp"] == t.format(11)
     # ** 15 с аудио = 10 (старт) + 15 + 30 (пауза 20→50) = 0:55 звонка
     assert out[6]["timestamp"] == t.format(55)
+
+
+def test_luna_profile_request_and_submission_mode():
+    from src.config.settings import Settings
+    from src.features.export.submission import _mode
+    from src.llm.client import LLMClient
+
+    profiles = Settings(_env_file=None).llm_profiles()
+    assert set(profiles) == {"gemini", "luna", "local"}
+    luna, gemini = profiles["luna"], profiles["gemini"]
+    assert luna.provider == "openai" and luna.model == "gpt-6-luna" and luna.base_url.startswith("https://api.openai.com")
+
+    # ! Рассуждающие модели OpenAI отклоняют temperature — Luna его не получает, остальные получают 0
+    msgs, schema = [{"role": "user", "content": "x"}], {"type": "object", "properties": {}, "additionalProperties": False}
+    luna_kwargs = LLMClient(luna)._request_kwargs(msgs, schema, luna.model)
+    assert "temperature" not in luna_kwargs and luna_kwargs["reasoning_effort"] == "low"
+    assert luna_kwargs["response_format"]["json_schema"]["schema"]["additionalProperties"] is False
+    assert LLMClient(gemini)._request_kwargs(msgs, schema, gemini.model)["temperature"] == 0
+
+    # ** В файле для сдачи Luna — внешний API, хотя провайдер openai, как у LM Studio
+    assert _mode({"profile": "luna", "provider": "openai"}) == "external_api"
+    assert _mode({"profile": "local", "provider": "openai"}) == "local"
+    assert _mode({"profile": "fallback", "provider": "openai"}) == "local"
+    assert _mode({"provider": "gemini"}) == "external_api"

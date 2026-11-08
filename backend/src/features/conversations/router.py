@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, status
 
 from src import db
 from src.dependencies import LLMDep, RegistryDep
-from src.features.transcription.service import transcribe
+from src.config.settings import get_settings
+from src.features.transcription.service import TranscriptionDisabled, transcribe
 from src.features.evaluation.service import list_conversations_with_scores
 from src.features.evaluation.timing import with_offsets
 
@@ -32,6 +33,8 @@ async def get_conversation(conversation_id: str) -> dict:
 @router.post("/{conversation_id}/transcribe")
 async def transcribe_call(conversation_id: str, registry: RegistryDep) -> dict:
     # * Принудительно (заново) распознаёт запись; старые оценки хранят свой снимок транскрипта и не ломаются
+    if not get_settings().transcribe_enabled:
+        raise TranscriptionDisabled()
     conv = await asyncio.to_thread(db.get_conversation, conversation_id)
     if not conv:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Диалог не найден")

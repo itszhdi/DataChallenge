@@ -9,7 +9,7 @@ import Button from '../ui/Button'
 import { Card, CardHeader } from '../ui/Card'
 import { Field, Select } from '../ui/Field'
 
-const PROFILES = ['gemini', 'local']
+const PROFILES = ['gemini', 'luna', 'local']
 const CALL_TRANSCRIPTS = ['asr', 'original']
 
 function profileState(result, t) {
@@ -40,15 +40,18 @@ export default function ModelSettings() {
               ))}
             </Select>
           </Field>
-          <Field label={t('settings.model.callTranscript')} hint={t('settings.model.callTranscriptHint')}>
-            <Select value={form.call_transcript} onChange={(event) => change('call_transcript', event.target.value)}>
-              {CALL_TRANSCRIPTS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`settings.model.transcript_${value}`)}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {/* Распознавание звонков выключено в .env (TRANSCRIBE_ENABLED) — выбирать транскрипт незачем */}
+          {form.transcribe_enabled && (
+            <Field label={t('settings.model.callTranscript')} hint={t('settings.model.callTranscriptHint')}>
+              <Select value={form.call_transcript} onChange={(event) => change('call_transcript', event.target.value)}>
+                {CALL_TRANSCRIPTS.map((value) => (
+                  <option key={value} value={value}>
+                    {t(`settings.model.transcript_${value}`)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
         </div>
         <div className="grid gap-2 sm:flex">
           <Button icon={LuPlugZap} loading={check.isPending} onClick={() => check.mutate()}>

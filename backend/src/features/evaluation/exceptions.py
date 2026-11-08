@@ -58,3 +58,13 @@ class JobAlreadyRunning(HTTPException):
 class JobNotFound(HTTPException):
     def __init__(self, job_id: str) -> None:
         super().__init__(status.HTTP_404_NOT_FOUND, f"Задача {job_id} не найдена")
+
+
+class JobNotActive(HTTPException):
+    code = "job_not_active"
+
+    def __init__(self, job_id: str, action: str) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT, f"Задачу {job_id} нельзя {action}: она уже завершена или в другом состоянии",
+            headers={ERROR_CODE_HEADER: self.code},
+        )

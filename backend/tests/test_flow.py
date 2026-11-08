@@ -370,6 +370,14 @@ async def test_call_transcribed_from_audio(client, monkeypatch):
     monkeypatch.setattr(asr, "fetch_audio", fake_audio)
     await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
 
+    # ** По умолчанию распознавание выключено: звонок оценивается по тексту датасета, запись в модель не уходит
+    card = (await client.post("/api/evaluate", json={"conversation_id": "s-en-003"})).json()
+    assert card["conversation"]["transcript_source"] == "original" and ["segments"] not in client.llm_calls
+    assert (await client.post("/api/conversations/s-en-003/transcribe")).status_code == 409
+    assert (await client.get("/api/settings")).json()["transcribe_enabled"] is False
+    client.llm_calls.clear()
+    monkeypatch.setattr(get_settings(), "transcribe_enabled", True)
+
     # ** Звонок оценивается по своему транскрипту (call_transcript=asr по умолчанию), снимок хранится в оценке
     card = (await client.post("/api/evaluate", json={"conversation_id": "s-en-003"})).json()
     assert client.llm_calls[0] == ["segments"] and card["conversation"]["transcript_source"] == "asr"
@@ -407,3 +415,81 @@ async def test_submission_format(client, tmp_path, monkeypatch):
     path = tmp_path / "results" / "dev" / "results.json"
     assert saved["path"] == str(path) and json.loads(path.read_text(encoding="utf-8"))["team_name"] == "T"
     assert (await client.post("/api/export/submission/save", params={"dataset": "SAMPLE", "target": "../x"})).status_code == 422
+
+
+async def test_pause_resume_and_stop_batch(client, monkeypatch):
+    good = LLMClient.complete_json
+    # * Каждый вызов модели ждёт свой замок: тест сам решает, какой ответ отпустить
+    gates: list[asyncio.Event] = []
+    cancelled = []
+
+    async def slow(self, messages, schema):
+        gate = asyncio.Event()
+        gates.append(gate)
+        try:
+            await gate.wait()
+        except asyncio.CancelledError:
+            cancelled.append(len(gates))
+            raise
+        return await good(self, messages, schema)
+
+    async def wait_for(job_id, check):
+        for _ in range(200):
+            job = (await client.get(f"/api/jobs/{job_id}")).json()
+            if check(job):
+                return job
+            await asyncio.sleep(0.01)
+        raise AssertionError(f"job state not reached: {job}")
+
+    monkeypatch.setattr(LLMClient, "complete_json", slow)
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+    ids = ["s-ru-001", "s-kz-002"]
+    job = (await client.post("/api/evaluate/batch", json={"conversation_ids": ids})).json()
+    first = job["conversation_ids"][0]
+    await wait_for(job["id"], lambda j: len(gates) == 1)
+
+    # ** Пауза прерывает запрос к модели и возвращает диалог в очередь, не считая его обработанным
+    assert (await client.post("/api/jobs/current/pause")).json()["status"] == "paused"
+    job = await wait_for(job["id"], lambda j: not j["current"])
+    assert cancelled == [1] and job["processed"] == 0
+    items = {i["id"]: i for i in (await client.get("/api/conversations")).json()}
+    assert items[first]["status"] == "queued"
+    assert (await client.post("/api/evaluate/batch", json={"conversation_ids": ids})).status_code == 409
+    await asyncio.sleep(0.05)
+    assert len(gates) == 1
+
+    # * Продолжение: тот же диалог берётся первым и оценивается
+    assert (await client.post(f"/api/jobs/{job['id']}/resume")).json()["status"] == "running"
+    job = await wait_for(job["id"], lambda j: len(gates) == 2)
+    assert job["current"] == [first]
+    gates[1].set()
+    job = await wait_for(job["id"], lambda j: len(gates) == 3)
+    assert job["done"][0]["conversation_id"] == first
+
+    # * Остановка: текущий прерван, статус снят, готовая оценка остаётся
+    assert (await client.post(f"/api/jobs/{job['id']}/stop")).json()["stopped"] is True
+    job = await wait_for(job["id"], lambda j: j["status"] == "finished")
+    assert len(job["done"]) == 1 and len(job["cancelled"]) == 1 and job["processed"] == 1 and cancelled == [1, 3]
+    items = {i["id"]: i for i in (await client.get("/api/conversations")).json()}
+    assert items[job["cancelled"][0]]["status"] is None and items[first]["last_evaluation_id"]
+    assert (await client.post(f"/api/jobs/{job['id']}/stop")).status_code == 409
+
+
+async def test_stop_auto_worker(client, monkeypatch):
+    gate = asyncio.Event()
+
+    async def hang(self, messages, schema):
+        await gate.wait()
+
+    monkeypatch.setattr(LLMClient, "complete_json", hang)
+    await client.post("/api/datasets/upload", files={"file": SAMPLE.open("rb")})
+    await client.patch("/api/settings", json={"auto_mode": True})
+    for _ in range(200):
+        if (await client.get("/api/queue")).json()["counts"]["running"]:
+            break
+        await asyncio.sleep(0.01)
+    assert (await client.post("/api/worker/stop")).json()["interrupted"] is True
+    await asyncio.sleep(0.05)
+    assert (await client.get("/api/settings")).json()["auto_mode"] is False
+    queue = (await client.get("/api/queue")).json()
+    assert queue["counts"]["running"] == 0 and queue["counts"]["failed"] == 0

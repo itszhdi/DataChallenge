@@ -127,7 +127,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     golden_parser = subparsers.add_parser("golden", help="сравнить ответы модели с CSV-эталоном")
     golden_parser.add_argument("csv", type=Path, help="CSV с conversation_id,criterion_id,expected")
-    golden_parser.add_argument("--profile", choices=["gemini", "local"], help="профиль модели (по умолчанию из настроек)")
+    golden_parser.add_argument("--profile", choices=["gemini", "luna", "local"], help="профиль модели (по умолчанию из настроек)")
     golden_parser.add_argument("--limit", type=int, help="сверить только первые N диалогов")
     args = parser.parse_args()
 

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any
 
 from fastapi import HTTPException
@@ -383,14 +383,31 @@ async def run_batch(registry: LLMRegistry, job: dict[str, Any], conversation_ids
     # ** Воркеры берут id по порядку (очередь в выбранной сортировке); running ставится, только когда диалог ушёл в модель
     action = evaluate_conversation if mode == "evaluate" else reapply_conversation
     await asyncio.to_thread(db.queue_statuses, conversation_ids, "batch", job["id"])
+    control = jobs.control(job["id"])
+    pending = deque(conversation_ids)
     fatal: dict[str, Any] | None = None
 
     async def one(cid: str) -> None:
         nonlocal fatal
         job["current"].append(cid)
+        task = asyncio.create_task(tracked(registry.active(), cid, action, "batch", job["id"]))
+        control.tasks[cid] = task
         try:
-            evaluation_id = await tracked(registry.active(), cid, action, "batch", job["id"])
+            evaluation_id = await task
             job["done"].append({"conversation_id": cid, "evaluation_id": evaluation_id})
+        except asyncio.CancelledError:
+            # ! Отменили сам пакет (остановка сервера), а не диалог — пробрасываем дальше
+            if not task.cancelled() or asyncio.current_task().cancelling():
+                raise
+            # * Пауза или остановка пользователем: диалог не обработан, processed не растёт
+            if control.stopped:
+                job["cancelled"].append(cid)
+                await asyncio.to_thread(db.clear_statuses, [cid])
+            else:
+                pending.appendleft(cid)
+                await asyncio.to_thread(db.requeue_status, cid)
+            logger.info("Batch job %s: %s interrupted (%s)", job["id"], cid, "stop" if control.stopped else "pause")
+            return
         except SKIP_ERRORS as e:
             job["skipped"].append({"conversation_id": cid, "reason": getattr(e, "detail", None) or str(e), "code": e.code})
         except HTTPException as e:
@@ -403,12 +420,16 @@ async def run_batch(registry: LLMRegistry, job: dict[str, Any], conversation_ids
             job["failed"].append({"conversation_id": cid, "reason": f"{type(e).__name__}: {e}", "code": "internal"})
         finally:
             job["current"].remove(cid)
-            job["processed"] += 1
-
-    pending = iter(conversation_ids)
+            control.tasks.pop(cid, None)
+        job["processed"] += 1
 
     async def worker() -> None:
-        for cid in pending:
+        while True:
+            # * На паузе воркер ждёт здесь; остановка будит его, чтобы выйти
+            await control.resume.wait()
+            if control.stopped or not pending:
+                return
+            cid = pending.popleft()
             if fatal:
                 # ** Модель недоступна для всех: остальным диалогам незачем ждать повторы
                 job["failed"].append({**fatal, "conversation_id": cid})
@@ -420,10 +441,14 @@ async def run_batch(registry: LLMRegistry, job: dict[str, Any], conversation_ids
     workers = registry.active().concurrency
     logger.info("Batch job %s (%s) started: %d conversations, %d workers", job["id"], mode, len(conversation_ids), workers)
     await asyncio.gather(*(worker() for _ in range(workers)))
+    if control.stopped and pending:
+        job["cancelled"].extend(pending)
+        await asyncio.to_thread(db.clear_statuses, list(pending))
     jobs.finish(job)
     logger.info(
-        "Batch job %s finished: done=%d failed=%d skipped=%d",
-        job["id"], len(job["done"]), len(job["failed"]), len(job["skipped"]),
+        "Batch job %s %s: done=%d failed=%d skipped=%d cancelled=%d",
+        job["id"], "stopped" if job["stopped"] else "finished",
+        len(job["done"]), len(job["failed"]), len(job["skipped"]), len(job["cancelled"]),
     )
 
 

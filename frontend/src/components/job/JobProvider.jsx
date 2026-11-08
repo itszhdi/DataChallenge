@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { fetchActiveJobs, fetchJob, startBatch } from '../../api/evaluations'
+import { fetchActiveJobs, fetchJob, pauseJob, resumeJob, startBatch, stopJob } from '../../api/evaluations'
 import { JobContext } from '../../hooks/useJob'
 import { JOB_POLL_MS, STORAGE_KEYS } from '../../lib/constants'
 
@@ -63,14 +63,24 @@ export default function JobProvider({ children }) {
     },
   })
 
+  // Пауза, продолжение и остановка: ответ сервера сразу кладём в кэш, чтобы баннер не ждал опроса
+  const control = useMutation({
+    mutationFn: ({ action, id }) => ({ pause: pauseJob, resume: resumeJob, stop: stopJob })[action](id),
+    onSuccess: (updated) => queryClient.setQueryData(['job', updated.id], updated),
+    onError: (error) => toast.error(error.detail || t('job.controlFailed')),
+  })
+
   const isRunning = start.isPending || (Boolean(jobId) && job?.status !== 'finished' && !query.isError)
   const { mutate } = start
+  const { mutate: controlJob, isPending: isControlling } = control
 
   const value = useMemo(
     () => ({
       job,
       isRunning,
       start: mutate,
+      control: (action) => job && controlJob({ action, id: job.id }),
+      isControlling,
       track,
       startError,
       result: finishedId && finishedId !== acknowledgedId ? job : null,
@@ -81,7 +91,7 @@ export default function JobProvider({ children }) {
         setAcknowledgedId(finishedId)
       },
     }),
-    [job, isRunning, mutate, track, startError, finishedId, acknowledgedId],
+    [job, isRunning, mutate, controlJob, isControlling, track, startError, finishedId, acknowledgedId],
   )
 
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>

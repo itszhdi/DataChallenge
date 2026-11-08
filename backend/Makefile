@@ -1,4 +1,4 @@
-.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs
+.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-luna use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs pause resume stop stop-auto
 
 PORT ?= 8000
 
@@ -70,6 +70,9 @@ models:
 use-gemini:
 	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"gemini"}'
 
+use-luna:
+	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"luna"}'
+
 use-local:
 	@curl -s -X PATCH localhost:$(PORT)/api/settings -H 'Content-Type: application/json' -d '{"llm_profile":"local"}'
 
@@ -93,3 +96,17 @@ transcribe:
 
 clean-db:
 	rm -f cqa.sqlite3 cqa.sqlite3-wal cqa.sqlite3-shm
+
+# * Управление пакетной оценкой: JOB=<id>, по умолчанию текущая задача
+pause:
+	@curl -s -X POST localhost:$(PORT)/api/jobs/$(or $(JOB),current)/pause
+
+resume:
+	@curl -s -X POST localhost:$(PORT)/api/jobs/$(or $(JOB),current)/resume
+
+stop:
+	@curl -s -X POST localhost:$(PORT)/api/jobs/$(or $(JOB),current)/stop
+
+# * Выключает авторежим и прерывает текущий диалог авто-воркера
+stop-auto:
+	@curl -s -X POST localhost:$(PORT)/api/worker/stop

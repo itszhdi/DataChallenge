@@ -72,13 +72,21 @@ def wants_asr(conversation: dict[str, Any], call_transcript: str) -> bool:
 
 
 async def prepare_transcript(conversation: dict[str, Any], call_transcript: str) -> tuple[list[dict[str, Any]], str]:
-    if not wants_asr(conversation, call_transcript):
+    # ** Распознавание выключено (TRANSCRIBE_ENABLED=false): звонок без текста в датасете будет пропущен как неоцениваемый
+    if not get_settings().transcribe_enabled or not wants_asr(conversation, call_transcript):
         return conversation.get("transcript") or [], "original"
     if conversation.get("transcript_asr"):
         return conversation["transcript_asr"], "asr"
     if _transcriber is None:
         raise TranscriptionFailed("клиент распознавания не настроен")
     return await transcribe(_transcriber, conversation), "asr"
+
+
+class TranscriptionDisabled(HTTPException):
+    code = "transcription_disabled"
+
+    def __init__(self) -> None:
+        super().__init__(status.HTTP_409_CONFLICT, "Распознавание звонков отключено (TRANSCRIBE_ENABLED=false)")
 
 
 class TranscriptionFailed(HTTPException):

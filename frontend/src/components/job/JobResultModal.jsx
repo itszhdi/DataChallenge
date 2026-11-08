@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
-import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRotateCcw } from 'react-icons/lu'
+import { LuCircleAlert, LuCircleCheck, LuCirclePause, LuCircleX, LuInfo, LuPlay, LuRotateCcw } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useJob } from '../../hooks/useJob'
 import { displayId } from '../../lib/format'
@@ -13,6 +13,7 @@ const OUTCOME_STYLE = {
   partial: { icon: LuCircleAlert, tone: 'text-warn-text' },
   failed: { icon: LuCircleX, tone: 'text-danger-text' },
   empty: { icon: LuInfo, tone: 'text-info-text' },
+  stopped: { icon: LuCirclePause, tone: 'text-warn-text' },
 }
 
 function Reasons({ groups, showCount }) {
@@ -50,11 +51,11 @@ function TechnicalDetails({ lines }) {
   )
 }
 
-function FinishedResult({ job, onClose, onRetry }) {
+function FinishedResult({ job, onClose, onRetry, onContinue }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const summary = summarizeJob(job)
-  const { outcome, done, failed, failedGroups, skippedGroups } = summary
+  const { outcome, done, failed, cancelled, failedGroups, skippedGroups } = summary
   const { icon: Icon, tone } = OUTCOME_STYLE[outcome]
 
   const openResults = () => {
@@ -63,7 +64,7 @@ function FinishedResult({ job, onClose, onRetry }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={t(`job.result.${outcome}.title`)} description={t(`job.result.${outcome}.text`, { done, failed })}>
+    <Modal open onClose={onClose} title={t(`job.result.${outcome}.title`)} description={t(`job.result.${outcome}.text`, { done, failed, cancelled })}>
       <div className="space-y-4">
         <Icon className={clsx('mx-auto size-12', tone)} aria-hidden />
         {failedGroups.length > 0 && <Reasons groups={failedGroups} showCount />}
@@ -75,6 +76,11 @@ function FinishedResult({ job, onClose, onRetry }) {
         )}
         <TechnicalDetails lines={[...job.failed, ...job.skipped].map((item) => `${displayId(item.conversation_id)}: ${item.reason}`)} />
         <div className="flex flex-wrap justify-end gap-2">
+          {cancelled > 0 && (
+            <Button icon={LuPlay} onClick={() => onContinue(job)}>
+              {t('job.result.continue', { count: cancelled })}
+            </Button>
+          )}
           {failed > 0 && (
             <Button icon={LuRotateCcw} onClick={() => onRetry(job)}>
               {t(done ? 'job.result.retryFailed' : 'job.result.retry')}
@@ -129,5 +135,10 @@ export default function JobResultModal() {
     acknowledge()
     start({ mode: job.kind, conversationIds: job.failed.map((item) => item.conversation_id) })
   }
-  return <FinishedResult job={result} onClose={acknowledge} onRetry={retry} />
+  // После остановки можно доделать снятые с очереди диалоги тем же режимом
+  const resumeCancelled = (job) => {
+    acknowledge()
+    start({ mode: job.kind, conversationIds: job.cancelled })
+  }
+  return <FinishedResult job={result} onClose={acknowledge} onRetry={retry} onContinue={resumeCancelled} />
 }

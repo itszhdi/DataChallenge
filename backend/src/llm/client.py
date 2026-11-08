@@ -146,9 +146,10 @@ class LLMClient:
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "temperature": 0,
             "response_format": {"type": "json_schema", "json_schema": {"name": "evaluation", "strict": True, "schema": send_schema}},
         }
+        if self.profile.temperature is not None:
+            kwargs["temperature"] = self.profile.temperature
         if self.profile.reasoning_effort:
             kwargs["reasoning_effort"] = self.profile.reasoning_effort
         if self.profile.max_tokens:
@@ -158,8 +159,10 @@ class LLMClient:
     async def complete_json(
         self, messages: list[dict[str, Any]], schema: dict[str, Any], channel: str | None = None
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        if self.provider == "gemini" and not self.profile.api_key:
-            raise LLMError("LLM_API_KEY не задан в .env", "llm_auth")
+        # * Облачным клиентам нужен ключ: без него сразу понятная ошибка вместо 401 от провайдера
+        key_env = "LUNA_API_KEY" if self.profile.name == "luna" else "LLM_API_KEY" if self.provider == "gemini" else None
+        if key_env and not self.profile.api_key:
+            raise LLMError(f"{key_env} не задан в .env", "llm_auth")
         if not self.model:
             raise LLMError(f"Модель для профиля {self.profile.name} не задана в .env", "llm_model_not_found")
 

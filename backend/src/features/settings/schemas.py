@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 # * Порядок очереди — общий для пакетной оценки и авто-воркера: по длине (число реплик) или по дате импорта
 QueueSort = Literal["short_first", "long_first", "newest_first", "oldest_first"]
-LLMProfileName = Literal["gemini", "local"]
+LLMProfileName = Literal["gemini", "luna", "local"]
 # * asr — свой транскрипт из аудио (Gemini), original — транскрипт из датасета
 CallTranscript = Literal["asr", "original"]
 # * Звонки (диалоги с записью) в очереди авто-воркера: вперемешку, сначала или в конце
