@@ -14,7 +14,7 @@
 | Компонент | Версия |
 |---|---|
 | Docker + Docker Compose | любой актуальный (рекомендуемый способ) |
-| или Python + [uv](https://docs.astral.sh/uv/) | Python 3.15+ |
+| Python + [uv](https://docs.astral.sh/uv/) | Python 3.15+ |
 | Node.js | 20+ (нужен только для разработки фронтенда; готовый интерфейс уже собран) |
 | LLM | ключ Gemini API, ключ OpenAI (GPT-6 Luna) **или** локальная модель в Ollama / LM Studio |
 
