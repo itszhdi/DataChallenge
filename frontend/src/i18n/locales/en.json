@@ -343,7 +343,7 @@
       "includeErrorsHint": "Dialogs with a preliminary score, where some criteria have no model answer",
       "performanceTitle": "Performance",
       "concurrency": "Parallel threads",
-      "concurrencyHint": "Limit that protects against API rate limits. For a local model, keep it at or below the parallel requests set in LM Studio. A new thread count applies from the next batch; the delay and model apply immediately.",
+      "concurrencyHint": "Limit that protects against API rate limits. For a local model, keep it at or below the parallel requests set in Ollama or LM Studio. A new thread count applies from the next batch; the delay and model apply immediately.",
       "delay": "Delay between requests, ms",
       "delayHint": "Minimum pause between model requests",
       "autoEvaluate": "Evaluate automatically right after importing a new dataset",
@@ -375,7 +375,7 @@
       "hint": "Switching applies immediately, no server restart",
       "profile": "Active model",
       "profile_gemini": "Gemini (cloud)",
-      "profile_local": "Local (LM Studio)",
+      "profile_local": "Local (Ollama / LM Studio)",
       "callTranscript": "Call transcript",
       "callTranscriptHint": "Which text calls are evaluated on",
       "transcript_asr": "Recognized from audio",
@@ -389,7 +389,7 @@
   "jobError": {
     "llm_unavailable": {
       "title": "The model is not running",
-      "action": "Open LM Studio, start the server, load the model and press “Try again”."
+      "action": "Start Ollama or LM Studio with the model loaded and press “Try again”."
     },
     "llm_timeout": {
       "title": "The model took too long",
@@ -409,7 +409,7 @@
     },
     "llm_model_not_found": {
       "title": "Model not found",
-      "action": "Load the model in LM Studio and check its name in LLM_MODEL."
+      "action": "Load the model in Ollama or LM Studio and check its name in .env (LOCAL_LLM_MODEL or LLM_MODEL)."
     },
     "llm_rejected": {
       "title": "The model refused the request",

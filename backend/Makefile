@@ -1,4 +1,4 @@
-.PHONY: submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs
+.PHONY: docker-up-ollama submit install run test import-dev upload eval batch job jobs queue retry-failed settings models use-gemini use-local auto-on auto-off worker save-results transcribe analytics golden clean-db docker-build docker-up docker-down docker-logs
 
 PORT ?= 8000
 
@@ -25,7 +25,7 @@ batch:
 
 # * Файл для сдачи организаторам: make submit DATASET=DEV TARGET=dev TEAM="Команда"
 submit:
-	@curl -s -X POST -G localhost:$(PORT)/api/export/submission/save --data-urlencode "dataset=$(or $(DATASET),DEV)" --data-urlencode "target=$(or $(TARGET),dev)" --data-urlencode "team_name=$(TEAM)" | python3 -m json.tool
+	@curl -s -X POST -G localhost:$(PORT)/api/export/submission/save --data-urlencode "dataset=$(or $(DATASET),DEV)" --data-urlencode "target=$(or $(TARGET),dev)" --data-urlencode "team_name=$(TEAM)" | python3 -m json.tool --no-ensure-ascii
 
 job:
 	@curl -s localhost:$(PORT)/api/jobs/$(JOB)
@@ -41,6 +41,10 @@ docker-build:
 
 docker-up:
 	docker compose up -d --build
+
+# * Docker + локальная модель в Ollama (Linux): контейнер в сети хоста, видит Ollama на localhost:11434
+docker-up-ollama:
+	docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d --build --force-recreate
 
 docker-down:
 	docker compose down

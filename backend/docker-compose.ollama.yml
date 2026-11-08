@@ -1,0 +1,7 @@
+# * Режим для локальной модели в Ollama (Linux): контейнер живёт в сети хоста и видит Ollama на localhost:11434.
+# Ollama по умолчанию слушает только 127.0.0.1, поэтому обычный проброс портов и host.docker.internal до неё не достают.
+# Запуск: make docker-up-ollama (API по-прежнему на http://localhost:8000)
+services:
+  api:
+    network_mode: host
+    ports: !reset []
